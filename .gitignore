@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Models and runtime binaries (downloaded by `pnpm models:fetch`, verified by sha256)
+public/models/*
+!public/models/manifest.json
+!public/models/LICENSES/
+public/ort/
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Cloudflare / wrangler
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Local only: Claude Code, Spec Kit and planning documents
+.claude/
+.specify/
+specs/
