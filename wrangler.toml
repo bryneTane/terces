@@ -1,0 +1,13 @@
+name = "terces"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "terces-usage"
+database_id = "00000000-0000-0000-0000-000000000000" # filled after `wrangler d1 create terces-usage`
+migrations_dir = "migrations"
+
+[vars]
+ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com" # replace with your Access team domain
+ACCESS_AUD = "replace-with-access-application-aud-tag"

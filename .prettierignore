@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+public/ort/
+public/models/
+pnpm-lock.yaml
+# Generated, minified data (scripts/build-geo.ts)
+public/geo/*.json

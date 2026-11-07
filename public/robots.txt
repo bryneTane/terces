@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /lab.html
+
+Sitemap: https://terces.pages.dev/sitemap.xml

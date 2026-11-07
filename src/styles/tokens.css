@@ -1,0 +1,21 @@
+/* Ice: cold cyan and white HUD, thin vector lines, one hot orange for alerts. Mirrors palette.ts. */
+@theme {
+  --color-void: #04070c;
+  --color-deep: #071019;
+  --color-panel: #0a1622;
+  --color-raised: #0f2233;
+  --color-line: #1d3a52;
+  --color-edge: #2e5a7c;
+  --color-ink: #eaf6ff;
+  --color-soft: #c6dbea;
+  --color-dim: #9dbbd1;
+  --color-muted: #7fa3bd;
+  --color-accent: #8de8ff;
+  --color-alert: #ff7320;
+  --color-danger: #ff7320;
+  --color-safe: #5ee6a8;
+  --color-mask: #0b0d10;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}

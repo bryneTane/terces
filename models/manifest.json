@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "name": "yunet",
+      "file": "yunet.onnx",
+      "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx",
+      "bytes": 232589,
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "license": "MIT",
+      "licenseUrl": "https://huggingface.co/opencv/face_detection_yunet/raw/main/LICENSE",
+      "source": "OpenCV Zoo, YuNet 2023mar (fixed 640x640 input)"
+    },
+    {
+      "name": "ppocr-det",
+      "file": "ppocrv5-det-mobile.onnx",
+      "url": "https://huggingface.co/nakamura196/ppocrv5-mobile-web-onnx/resolve/main/PP-OCRv5_mobile_det.onnx",
+      "bytes": 4766440,
+      "sha256": "6bdf743af375b13fbbeeb47a91a40063af5bfb7a7f197f6df8cb990dc827e5d6",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/LICENSE",
+      "source": "PaddlePaddle PP-OCRv5_mobile_det, ONNX conversion by S. Nakamura (weights unchanged)"
+    },
+    {
+      "name": "ppocr-rec-latin",
+      "file": "ppocrv5-latin-rec-mobile.onnx",
+      "url": "https://huggingface.co/nakamura196/ppocrv5-mobile-web-onnx/resolve/main/latin_PP-OCRv5_mobile_rec.onnx",
+      "bytes": 8044305,
+      "sha256": "46449fd0606cd07d856744703211ea6826e4642d4c803d91167c53cde01d3b94",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/LICENSE",
+      "source": "PaddlePaddle latin_PP-OCRv5_mobile_rec, ONNX conversion by S. Nakamura (weights unchanged)"
+    },
+    {
+      "name": "ppocr-dict-latin",
+      "file": "ppocrv5-latin-dict.json",
+      "url": "https://huggingface.co/nakamura196/ppocrv5-mobile-web-onnx/resolve/main/latin_PP-OCRv5_mobile_rec.dict.json",
+      "bytes": 4291,
+      "sha256": "705592cc40b955ac82cdfdb049ec75f0a9041824d524eeb946a913a34d285409",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/LICENSE",
+      "source": "character_dict of latin_PP-OCRv5_mobile_rec (class 0 = CTC blank, k+1 = dict[k], last = space)"
+    },
+    {
+      "name": "yolox-nano",
+      "file": "yolox-nano.onnx",
+      "url": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx",
+      "bytes": 3659407,
+      "sha256": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://raw.githubusercontent.com/Megvii-BaseDetection/YOLOX/main/LICENSE",
+      "source": "Megvii YOLOX-Nano, COCO, release 0.1.1rc0"
+    }
+  ]
+}

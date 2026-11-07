@@ -1,0 +1,66 @@
+{
+  "street-gps.jpg": {
+    "width": 1600,
+    "height": 1257,
+    "faces": {
+      "min": 3
+    },
+    "text": [
+      {
+        "text": "12 RUE DE LA PAIX",
+        "box": {
+          "x": 96,
+          "y": 75,
+          "w": 576,
+          "h": 138
+        }
+      }
+    ],
+    "metadata": {
+      "lat": 45.764,
+      "lon": 4.8357,
+      "make": "Apple",
+      "model": "iPhone 17 Pro",
+      "serial": "F2LX1234ABCD",
+      "artist": "Jane Doe"
+    }
+  },
+  "rotated.jpg": {
+    "stored": {
+      "width": 400,
+      "height": 300
+    },
+    "displayed": {
+      "width": 300,
+      "height": 400
+    }
+  },
+  "no-metadata.png": {
+    "metadata": null,
+    "text": [
+      {
+        "text": "No metadata here"
+      }
+    ]
+  },
+  "plate.jpg": {
+    "plates": {
+      "min": 1
+    }
+  },
+  "group-faces.jpg": {
+    "faces": {
+      "min": 3
+    }
+  },
+  "dense-text.jpg": {
+    "textRegions": {
+      "min": 60
+    }
+  },
+  "huge-48mp.jpg": {
+    "width": 8000,
+    "height": 6000,
+    "downscaled": true
+  }
+}

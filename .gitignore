@@ -44,3 +44,8 @@ pnpm-debug.log*
 .claude/
 .specify/
 specs/
+
+# Local download caches (geo data sources, original fixture photos)
+scripts/.cache/
+tests/fixtures/.sources/
+
