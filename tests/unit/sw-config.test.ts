@@ -24,7 +24,21 @@ describe('service worker config', () => {
 
   it('keeps admin, lab, models and ORT out of the precache', () => {
     for (const p of ['admin/**', 'lab.html', 'models/**', 'ort/**']) expect(wb.globIgnores).toContain(p);
-    for (const re of wb.navigateFallbackDenylist!)
-      expect(['/api/hit', '/admin', '/lab.html'].some((p) => re.test(p))).toBe(true);
+  });
+
+  it('falls back to the app shell for the app pages only, never for server pages', () => {
+    expect(wb.navigateFallbackDenylist).toBeUndefined();
+    const [allow] = wb.navigateFallbackAllowlist!;
+    for (const p of ['/', '/?source=pwa', '/fr/', '/fr/?x=1', '/index.html'])
+      expect(allow!.test(p), p).toBe(true);
+    for (const p of [
+      '/cdn-cgi/access/authorized?nonce=1&state=2',
+      '/admin',
+      '/admin/',
+      '/api/hit',
+      '/lab.html',
+      '/fr/admin',
+    ])
+      expect(allow!.test(p), p).toBe(false);
   });
 });
