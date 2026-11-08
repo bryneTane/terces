@@ -8,8 +8,9 @@ export const MOSAIC_NOISE = 24;
 export const BLUR_NOISE = 6;
 export type MaskStyle = 'blur' | 'mosaic' | 'opaque' | 'emoji';
 export type Category = Zone['category'];
-/** Style per zone category. Missing categories use the default. */
-export type MaskStyles = Partial<Record<Category, MaskStyle>>;
+/** Style per zone category (missing ones use the default), and the emoji for faces: one for
+ * all faces, or 'mix' for a different one per face. */
+export type MaskStyles = Partial<Record<Category, MaskStyle>> & { emoji?: string };
 export const DEFAULT_STYLE: MaskStyle = 'blur';
 const CATEGORIES: Category[] = ['face', 'text', 'plate', 'person', 'manual'];
 /** Styles offered for a category: emoji only makes sense on a face. */
@@ -259,7 +260,8 @@ export function renderCloak(
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffd23f';
-      ctx.fillText(EMOJIS[faces % EMOJIS.length]!, shape.cx, shape.cy + size * 0.04);
+      const pick = typeof styles === 'object' && styles.emoji && styles.emoji !== 'mix' ? styles.emoji : null;
+      ctx.fillText(pick ?? EMOJIS[faces % EMOJIS.length]!, shape.cx, shape.cy + size * 0.04);
     }
     if (z.category === 'face') faces++;
   }

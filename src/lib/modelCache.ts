@@ -19,7 +19,11 @@ const defaultDeps = (): CacheDeps => ({
   name: __MODEL_CACHE__,
 });
 
-/** Every file the scanner needs, from the two manifests (which are cached too). */
+/**
+ * Every file the scanner needs, from the two manifests (which are cached too). Readers for other
+ * alphabets (models/readers/) are left out: the scanner fetches them the first time a photo has
+ * text, and the service worker keeps them for offline use from then on.
+ */
 export async function listModelFiles(fetchFn: typeof fetch): Promise<CacheFile[]> {
   const models = (await (await fetchFn('/models/manifest.json')).json()) as {
     models: { file: string; bytes: number }[];
@@ -33,7 +37,9 @@ export async function listModelFiles(fetchFn: typeof fetch): Promise<CacheFile[]
   return [
     { url: '/models/manifest.json', bytes: 0 },
     { url: '/ort/manifest.json', bytes: 0 },
-    ...models.models.map((m) => ({ url: `/models/${m.file}`, bytes: m.bytes })),
+    ...models.models
+      .filter((m) => !m.file.startsWith('readers/'))
+      .map((m) => ({ url: `/models/${m.file}`, bytes: m.bytes })),
     { url: `/ort/${ort.glue}`, bytes: 0 },
     ...ort.parts.map((p) => ({ url: `/ort/${p}`, bytes: partBytes })),
   ];

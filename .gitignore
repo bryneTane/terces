@@ -49,3 +49,7 @@ specs/
 scripts/.cache/
 tests/fixtures/.sources/
 
+
+# Detection eval: downloaded photos, results, and photos that cannot be shared
+tests/eval/.cache/
+tests/eval/local.json

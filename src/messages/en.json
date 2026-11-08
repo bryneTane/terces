@@ -75,6 +75,7 @@
   "card.footer": "Runs on your phone. Nothing is uploaded.",
   "result.shareWarning": "Share the warning",
   "result.shareWarningNote": "A card with the count only. Your photo is not in it.",
+  "result.downloadWarning": "Download the warning card",
   "about.link": "How it works",
   "about.back": "Back",
   "about.title": "How Terces works",
@@ -269,5 +270,10 @@
   "meta.description": "Find the hidden location, phone model, faces, text and plates in a photo, then cover them in one tap. Free, runs on your phone, nothing is uploaded.",
   "review.listHead": "Zones on the photo",
   "review.styleBlur": "Blur",
-  "review.styleEmoji": "Emoji"
+  "review.styleEmoji": "Emoji",
+  "review.expand": "Show",
+  "review.collapse": "Close",
+  "review.covered": "covered",
+  "review.emojiLegend": "Which emoji? Mix gives each face a different one.",
+  "review.emojiMix": "Mix"
 }

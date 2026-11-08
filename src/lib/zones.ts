@@ -54,6 +54,7 @@ export function findingsToZones(visual: VisualFinding[], width: number, height: 
     category: f.category,
     rect: pad(f.box, ZONE_PADDING, width, height),
     selected: f.category !== 'person',
+    ...(f.text ? { text: f.text } : {}),
   }));
 }
 

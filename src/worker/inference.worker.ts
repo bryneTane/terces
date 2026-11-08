@@ -15,13 +15,15 @@ const runtime = new ModelRuntime(
   (stage, loaded, total) => post({ type: 'progress', stage, loaded, total }),
 );
 let ready: Promise<void> | null = null;
-let dict: Promise<readonly string[]> | null = null;
-const loadDict = () => {
-  dict ??= runtime
-    .file('ppocr-dict-latin', 'text-rec')
-    .then((b) => JSON.parse(new TextDecoder().decode(b)) as string[]);
-  dict.catch(() => (dict = null));
-  return dict;
+const dicts = new Map<string, Promise<readonly string[]>>();
+const loadDict = (name: string) => {
+  let d = dicts.get(name);
+  if (!d) {
+    d = runtime.file(name, 'text-rec').then((b) => JSON.parse(new TextDecoder().decode(b)) as string[]);
+    dicts.set(name, d);
+    d.catch(() => dicts.delete(name));
+  }
+  return d;
 };
 const cancelled = new Set<string>();
 

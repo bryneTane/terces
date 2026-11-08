@@ -29,7 +29,7 @@ export function Result({
   const { t, locale } = useI18n();
   const { tier } = useQuality();
   const [pos, setPos] = useState(50);
-  const [busy, setBusy] = useState<'file' | 'card' | null>(null);
+  const [busy, setBusy] = useState<'file' | 'card' | 'card-download' | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [filename] = useState(() => cloakedFilename());
   const result = session.result;
@@ -39,21 +39,26 @@ export function Result({
   const canShare = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function';
   const before = session.file ? objectUrlFor(session.file) : null;
 
-  const save = async (what: 'file' | 'card') => {
+  // Numbers only: the card never sees the photo or any text read in it.
+  const card = () =>
+    renderShareCard({
+      count: total,
+      breakdown: { metadata: session.metadata.length, ...countByCategory(session.visual) },
+      locale,
+    });
+
+  const save = async (what: 'file' | 'card' | 'card-download') => {
     setBusy(what);
     try {
+      if (what === 'card-download') {
+        download(await card(), CARD_FILENAME);
+        setNote(t('result.downloaded'));
+        return;
+      }
       const outcome =
         what === 'file'
           ? await shareOrDownload(result.blob, filename)
-          : // Numbers only: the card never sees the photo or any text read in it.
-            await shareOrDownload(
-              await renderShareCard({
-                count: total,
-                breakdown: { metadata: session.metadata.length, ...countByCategory(session.visual) },
-                locale,
-              }),
-              CARD_FILENAME,
-            );
+          : await shareOrDownload(await card(), CARD_FILENAME);
       setNote(outcome === 'downloaded' ? t('result.downloaded') : null);
     } finally {
       setBusy(null);
@@ -270,15 +275,34 @@ export function Result({
               <div className="min-w-0 flex-[1_1_180px]">
                 <h2 className="font-display m-0 text-lg font-semibold">{t('result.warnTitle')}</h2>
                 <p className="mt-1 mb-3 text-[13px] text-dim">{t('result.warnBody', { count: total })}</p>
-                <button
-                  type="button"
-                  onClick={() => save('card')}
-                  disabled={busy !== null}
-                  className="btn-ghost w-full"
-                >
-                  {busy === 'card' ? <Spinner /> : <Icon name="share" size={16} />}
-                  {t('result.shareWarning')}
-                </button>
+                <div className={`grid gap-2 ${canShare ? 'sm:grid-cols-[1fr_auto]' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => save('card')}
+                    disabled={busy !== null}
+                    className="btn-ghost w-full"
+                  >
+                    {busy === 'card' ? (
+                      <Spinner />
+                    ) : (
+                      <Icon name={canShare ? 'share' : 'download'} size={16} />
+                    )}
+                    {t('result.shareWarning')}
+                  </button>
+                  {/* The share sheet has no "save" on every device: the card can always be downloaded. */}
+                  {canShare && (
+                    <button
+                      type="button"
+                      onClick={() => save('card-download')}
+                      disabled={busy !== null}
+                      className="btn-ghost"
+                      aria-label={t('result.downloadWarning')}
+                    >
+                      {busy === 'card-download' ? <Spinner /> : <Icon name="download" size={16} />}
+                      {t('result.download')}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           }

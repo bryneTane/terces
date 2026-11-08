@@ -75,6 +75,7 @@
   "card.footer": "Tout se passe sur votre téléphone. Rien n'est envoyé.",
   "result.shareWarning": "Partager l'alerte",
   "result.shareWarningNote": "Une carte avec le décompte seulement. Votre photo n'y est pas.",
+  "result.downloadWarning": "Télécharger la carte d'avertissement",
   "about.link": "Comment ça marche",
   "about.back": "Retour",
   "about.title": "Comment fonctionne Terces",
@@ -269,5 +270,10 @@
   "meta.description": "Trouvez la position cachée, le modèle de téléphone, les visages, le texte et les plaques d'une photo, puis masquez-les en un geste. Gratuit, sur votre téléphone, rien n'est envoyé.",
   "review.listHead": "Zones sur la photo",
   "review.styleBlur": "Flou",
-  "review.styleEmoji": "Émoji"
+  "review.styleEmoji": "Émoji",
+  "review.expand": "Afficher",
+  "review.collapse": "Fermer",
+  "review.covered": "couverts",
+  "review.emojiLegend": "Quel émoji ? Mélange en donne un différent à chaque visage.",
+  "review.emojiMix": "Mélange"
 }

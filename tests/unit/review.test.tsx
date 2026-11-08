@@ -45,9 +45,12 @@ describe('Review', () => {
     const faces = within(screen.getByRole('group', { name: 'Faces' }));
     expect(faces.getByLabelText('Blur')).toBeChecked();
     expect(faces.getByLabelText('Emoji')).toBeInTheDocument();
+    expect(screen.queryByLabelText('👶')).toBeNull(); // emoji picker only once Emoji is chosen
     fireEvent.click(faces.getByLabelText('Emoji'));
+    expect(screen.getByLabelText('Mix')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('👶'));
     fireEvent.click(screen.getByRole('button', { name: 'Cloak · 1 zone' }));
-    expect(onCloak).toHaveBeenCalledWith({ face: 'emoji' });
+    expect(onCloak).toHaveBeenCalledWith({ face: 'emoji', emoji: '👶' });
   });
 });
 
@@ -111,5 +114,23 @@ describe('Review zone list', () => {
     expect(texts).toHaveAttribute('aria-expanded', 'true');
     expect(list).toBeVisible();
     expect(within(list).getAllByRole('listitem')).toHaveLength(8);
+  });
+});
+
+describe('Review zone names', () => {
+  it('names text zones by what they say, and numbers the unread ones', () => {
+    const t = (id: string, text?: string) => ({
+      id,
+      kind: 'detected' as const,
+      category: 'text' as const,
+      rect: { x: 0, y: 0, w: 8, h: 8 },
+      selected: true,
+      ...(text ? { text } : {}),
+    });
+    show(session({ zones: [t('a', 'THE TOURIST'), t('b'), t('c', 'Nina')] }));
+    const list = document.getElementById('zones-text')!;
+    expect(within(list).getByText('“THE TOURIST”')).toBeInTheDocument();
+    expect(within(list).getByText('“Nina”')).toBeInTheDocument();
+    expect(within(list).getByText('Text 1')).toBeInTheDocument();
   });
 });

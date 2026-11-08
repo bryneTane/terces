@@ -26,7 +26,9 @@ describe('About', () => {
   it('lists every detection model with its license, and the map data attribution', () => {
     show('en');
     const list = screen.getByTestId('model-list');
-    expect(list.querySelectorAll('li')).toHaveLength(4);
+    // Faces, text detection, one text reader per alphabet (10), people.
+    expect(list.querySelectorAll('li')).toHaveLength(13);
+    expect(list).toHaveTextContent('text reader for Arabic');
     expect(list).toHaveTextContent('MIT');
     expect(list).toHaveTextContent('Apache-2.0');
     expect(screen.getByText(/GeoNames, CC BY 4.0/)).toBeInTheDocument();

@@ -6,6 +6,7 @@ import {
   detectText,
   largest,
   recWidth,
+  readTexts,
   recognizeText,
   rotate90,
 } from '../../src/worker/models/ppocr.ts';
@@ -13,7 +14,7 @@ import { iou } from '../../src/worker/models/common.ts';
 import { imageSource, runner } from './model-helpers.ts';
 import expected from '../fixtures/expected.json';
 
-const dict = JSON.parse(readFileSync('public/models/ppocrv5-latin-dict.json', 'utf8')) as string[];
+const dict = JSON.parse(readFileSync('public/models/ppocrv5-dict-latin.json', 'utf8')) as string[];
 
 /** Build [T, C] one-hot-ish probabilities for a class sequence. */
 function logits(seq: number[], classes = dict.length + 2) {
@@ -81,8 +82,19 @@ describe('recognition on real images (onnxruntime-node)', () => {
     const boxes = await detectText(src, await runner('ppocrv5-det-mobile.onnx'));
     const sign = expected['street-gps.jpg'].text[0]!;
     const box = boxes.reduce((a, b) => (iou(b, sign.box) > iou(a, sign.box) ? b : a));
-    const rec = await runner('ppocrv5-latin-rec-mobile.onnx');
+    const rec = await runner('ppocrv5-rec-latin.onnx');
     const r = await recognizeText(src, box, rec, dict);
     expect(r?.text).toBe(sign.text);
+  }, 60_000);
+});
+
+describe('reading many boxes', () => {
+  it('reads each box like one box at a time, in order', async () => {
+    const src = await imageSource('tests/fixtures/street-gps.jpg');
+    const boxes = (await detectText(src, await runner('ppocrv5-det-mobile.onnx'))).slice(0, 6);
+    const rec = await runner('ppocrv5-rec-latin.onnx');
+    const all = await readTexts(src, [...boxes, { x: 0, y: 0, w: 1, h: 1 }], rec, dict);
+    expect(all.at(-1)).toBeNull();
+    for (const [i, b] of boxes.entries()) expect(all[i]).toEqual(await recognizeText(src, b, rec, dict));
   }, 60_000);
 });

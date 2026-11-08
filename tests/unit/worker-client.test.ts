@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InferenceClient, type WorkerLike } from '../../src/worker/client.ts';
 import type { FromWorker, ToWorker } from '../../src/worker/protocol.ts';
+import { READERS } from '../../src/worker/models/readers.ts';
 import { createStages, runScan, type ScanContext, type ScanStage } from '../../src/worker/scan.ts';
 
 function fakeWorker() {
@@ -104,8 +105,10 @@ describe('scan stages (full order)', () => {
     const stages = createStages({
       detectFaces: vi.fn(async () => [box(1)]),
       detectText: vi.fn(async () => [box(100, 60, 15), box(3)]),
-      recognizeText: vi.fn(async (_s, b) =>
-        b.x === 100 ? { text: 'AB-123-CD', score: 0.9 } : { text: 'HELLO', score: 0.9 },
+      readTexts: vi.fn(async (_s, boxes) =>
+        boxes.map((b: { x: number }) =>
+          b.x === 100 ? { text: 'AB-123-CD', score: 0.9 } : { text: 'HELLO', score: 0.9 },
+        ),
       ),
       detectObjects: vi.fn(async () => [
         { category: 'person' as const, label: 'person', box: { x: 0, y: 0, w: 4, h: 9 }, score: 0.8 },
@@ -143,7 +146,7 @@ describe('scan stages (full order)', () => {
     expect(runner.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
       'yunet',
       'ppocr-det',
-      'ppocr-rec-latin',
+      ...READERS.map((r) => `ppocr-rec-${r.key}`),
       'yolox-nano',
     ]);
   });
@@ -156,7 +159,7 @@ describe('scan stages (faces then text)', () => {
     const stages = createStages({
       detectFaces: vi.fn(async () => [box(1), box(2)]),
       detectText: vi.fn(async () => [box(3)]),
-      recognizeText: vi.fn(async () => null),
+      readTexts: vi.fn(async (_s, boxes) => boxes.map(() => null)),
     });
     const runner = vi.fn(() => vi.fn());
     await runScan(
@@ -178,5 +181,51 @@ describe('scan stages (faces then text)', () => {
       ['yunet', 'face'],
       ['ppocr-det', 'text-det'],
     ]);
+  });
+});
+
+describe('text reading in every alphabet', () => {
+  const textStages = (read: (model: string) => { text: string; score: number } | Error) =>
+    createStages({
+      detectText: vi.fn(async () => [{ x: 0, y: 0, w: 60, h: 20, score: 0.9 }]),
+      readTexts: vi.fn(async (_s, boxes, run) => {
+        const r = read((run as unknown as { model: string }).model);
+        if (r instanceof Error) throw r;
+        return boxes.map(() => r);
+      }),
+    }).filter((s) => s.name === 'text-det' || s.name === 'text-rec');
+  const scan = (stages: ScanStage[]) => {
+    const texts: string[] = [];
+    return runScan(
+      {
+        source: { width: 100, height: 100, pixels: vi.fn() },
+        runner: (model) => Object.assign(vi.fn(), { model }),
+        dict: async () => [],
+        categories: ['text'],
+        emit: (f) => void (f.text && texts.push(f.text)),
+        cancelled: () => false,
+      },
+      stages,
+    ).then(() => texts);
+  };
+
+  it("names a Chinese sign in Chinese, not with the Latin reader's guess", async () => {
+    const texts = await scan(
+      textStages((m) =>
+        m === 'ppocr-rec-zh' ? { text: '禁止吸烟', score: 0.97 } : { text: 'Wt*', score: 0.6 },
+      ),
+    );
+    expect(texts).toEqual(['禁止吸烟']);
+  });
+
+  it('skips a reader that cannot load, and keeps the Latin reading', async () => {
+    const texts = await scan(
+      textStages((m) => (m === 'ppocr-rec-latin' ? { text: 'OPEN', score: 0.95 } : new Error('offline'))),
+    );
+    expect(texts).toEqual(['OPEN']);
+  });
+
+  it('fails the scan when the Latin reader itself cannot run', async () => {
+    await expect(scan(textStages(() => new Error('broken')))).rejects.toThrow('broken');
   });
 });

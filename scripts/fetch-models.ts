@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyOrPin, type Manifest } from './model-manifest.ts';
+import { licenseFileName, prepare, verifyOrPin, type Manifest } from './model-manifest.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const manifestPath = join(root, 'models/manifest.json');
@@ -21,17 +21,22 @@ async function download(url: string): Promise<Uint8Array> {
 for (const [i, entry] of manifest.models.entries()) {
   const target = join(outDir, entry.file);
   const cached: Uint8Array | null = existsSync(target) ? new Uint8Array(readFileSync(target)) : null;
-  let result = cached ? verifyOrPin(entry, cached) : null;
+  // The served file is checked against its own pin; a download goes through `prepare`, which
+  // also checks the source pin and converts it (8-bit weights, dictionaries).
+  let result = cached && entry.sha256 ? verifyOrPin(entry, cached) : null;
   if (!result?.ok) {
     process.stdout.write(`downloading ${entry.name}... `);
-    const buf = await download(entry.url);
-    result = verifyOrPin(entry, buf);
-    if (!result.ok) {
-      console.error(`\n${result.reason}`);
+    const prepared = prepare(entry, await download(entry.url));
+    if (!prepared.ok) {
+      console.error(`\n${prepared.reason}`);
       process.exit(1);
     }
-    writeFileSync(target, buf);
-    console.log(`${(buf.byteLength / 1e6).toFixed(2)} MB`);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, prepared.bytes);
+    console.log(
+      `${(prepared.bytes.byteLength / 1e6).toFixed(2)} MB${entry.convert ? ` (${entry.convert})` : ''}`,
+    );
+    result = prepared;
   } else {
     console.log(`${entry.name}: cached, verified`);
   }
@@ -40,7 +45,7 @@ for (const [i, entry] of manifest.models.entries()) {
     pinnedAny = true;
     console.log(`  pinned sha256 ${result.entry.sha256}`);
   }
-  const licenseFile = join(licenseDir, `${entry.name}.LICENSE.txt`);
+  const licenseFile = join(licenseDir, licenseFileName(entry.licenseUrl));
   if (!existsSync(licenseFile)) writeFileSync(licenseFile, await download(entry.licenseUrl));
 }
 

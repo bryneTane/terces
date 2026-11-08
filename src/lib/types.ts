@@ -44,6 +44,8 @@ export interface Zone {
   rect: Rect;
   /** Default true, except `person` default false. */
   selected: boolean;
+  /** What the text or plate says, when it could be read. */
+  text?: string;
 }
 
 export interface CloakSummary {
@@ -62,12 +64,6 @@ export interface CloakResult {
   /** `false` disables share and download. */
   verified: boolean;
   summary: CloakSummary;
-}
-
-export interface ShareCard {
-  count: number;
-  breakdown: Partial<Record<VisualCategory | MetadataGroup, number>>;
-  blob: Blob;
 }
 
 export type AppErrorCode = 'decode' | 'heic' | 'model-load' | 'oom' | 'verify-failed' | 'unknown';

@@ -49,3 +49,30 @@ test('the warning card carries the count, never the photo', async ({ page }, inf
   );
   expect(stats).toEqual({ w: 1080, h: 1350, magentaish: 0 });
 });
+
+test('the warning card can be downloaded even where the share sheet is available', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+    Object.defineProperty(navigator, 'share', { value: async () => {}, configurable: true });
+  });
+  await page.goto('/');
+  const png = await page.evaluate(async () => {
+    const c = new OffscreenCanvas(400, 300);
+    c.getContext('2d')!.fillRect(0, 0, 400, 300);
+    return [...new Uint8Array(await (await c.convertToBlob({ type: 'image/png' })).arrayBuffer())];
+  });
+  await page
+    .getByTestId('file-input')
+    .setInputFiles({ name: 'dark.png', mimeType: 'image/png', buffer: Buffer.from(png) });
+  await scanToReview(page);
+  await page.getByRole('button', { name: 'Cloak' }).click();
+  await expect(page.getByRole('heading', { name: 'Cloaked' })).toBeVisible({ timeout: 60_000 });
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download the warning card' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('terces-warning.png');
+  await expect(page.getByRole('status')).toHaveText('Saved to your device.');
+});

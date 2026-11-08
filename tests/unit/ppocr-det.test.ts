@@ -7,9 +7,10 @@ import { imageSource, runner } from './model-helpers.ts';
 import expected from '../fixtures/expected.json';
 
 describe('PP-OCR detection helpers', () => {
-  it('sizes the input to multiples of 32 with a 960 limit', () => {
-    expect(detSize(1600, 1257)).toEqual({ w: 960, h: 768 });
-    expect(detSize(100, 50)).toEqual({ w: 96, h: 64 });
+  it('scales the longest side to the 1600 px limit (up or down), in multiples of 32', () => {
+    expect(detSize(3200, 2514)).toEqual({ w: 1600, h: 1248 });
+    expect(detSize(1024, 673)).toEqual({ w: 1600, h: 1056 });
+    expect(detSize(100, 50, 960)).toEqual({ w: 960, h: 480 });
   });
 
   it('turns one blob of probability into one unclipped box', () => {

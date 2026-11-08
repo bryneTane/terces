@@ -3,7 +3,7 @@ import { Icon, type IconName } from '../components/Icon.tsx';
 import { PhotoFrame, PhotoView } from '../components/PhotoView.tsx';
 import { ZoneLayer, type Tool } from '../components/ZoneLayer.tsx';
 import { useI18n } from '../i18n.tsx';
-import { DEFAULT_STYLE, stylesFor, type MaskStyle, type MaskStyles } from '../lib/mask.ts';
+import { DEFAULT_STYLE, EMOJIS, stylesFor, type MaskStyle, type MaskStyles } from '../lib/mask.ts';
 import type { PhotoSession, Zone } from '../lib/types.ts';
 import { addManualZone, removeZone, resizeZone, toggleZone } from '../lib/zones.ts';
 
@@ -79,10 +79,13 @@ export function Review({
   const cloaking = session.state === 'cloaking';
   const present = GROUPS.filter((g) => zones.some((z) => z.category === g.cat));
 
-  // Per category numbering, in list order: "Face 1", "Face 2"...
   const names = new Map<string, string>();
-  for (const g of GROUPS)
-    zones.filter((z) => z.category === g.cat).forEach((z, i) => names.set(z.id, t(g.item, { n: i + 1 })));
+  // Text and plates go by what they say; the rest (and unread text) are numbered.
+  for (const g of GROUPS) {
+    let n = 0;
+    for (const z of zones.filter((q) => q.category === g.cat))
+      names.set(z.id, z.text ? `“${z.text}”` : t(g.item, { n: ++n }));
+  }
   const nameOf = (z: Zone) => names.get(z.id) ?? t(`cat.${z.category}`);
 
   const commit = (next: Zone[]) => {
@@ -239,19 +242,34 @@ export function Review({
                       aria-expanded={isOpen}
                       aria-controls={`zones-${g.cat}`}
                       onClick={() => setOpen((o) => ({ ...o, [g.cat]: !isOpen }))}
-                      className="flex min-h-11 w-full items-center gap-2.5 px-5 font-mono text-[11px] font-normal tracking-[0.14em] text-dim uppercase hover:text-ink"
+                      className="group flex min-h-12 w-full items-center gap-3 bg-raised/40 px-5 text-left transition-colors hover:bg-raised"
                     >
                       <span
                         aria-hidden="true"
-                        className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                        className="grid size-7 shrink-0 place-items-center border border-edge text-ink group-hover:border-accent group-hover:text-accent"
                       >
-                        <Icon name="arrow" size={14} />
+                        <span className={`transition-transform ${isOpen ? '' : '-rotate-90'}`}>
+                          <Icon name="chevron" size={16} />
+                        </span>
                       </span>
-                      <span className="flex-1 text-left">{t(g.group)}</span>
-                      {g.cat === 'person' && <span className="text-muted">{t('review.offDefault')}</span>}
-                      <span aria-hidden="true" className="tabular-nums">
-                        <span className="text-alert">{list.filter((z) => z.selected).length}</span>/
-                        {list.length}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-mono text-[12px] tracking-[0.14em] text-ink uppercase">
+                          {t(g.group)}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className="block font-mono text-[11px] text-dim tabular-nums"
+                        >
+                          <span className="text-alert">{list.filter((z) => z.selected).length}</span>/
+                          {list.length} {t('review.covered')}
+                          {g.cat === 'person' && ` · ${t('review.offDefault')}`}
+                        </span>
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="font-mono text-[11px] tracking-[0.12em] text-accent uppercase underline-offset-4 group-hover:underline"
+                      >
+                        {isOpen ? t('review.collapse') : t('review.expand')}
                       </span>
                     </button>
                   </h3>
@@ -277,7 +295,9 @@ export function Review({
                             <span className={z.selected ? 'text-alert' : 'text-accent'}>
                               <Icon name={g.icon} size={17} />
                             </span>
-                            <span className="min-w-0 flex-1 truncate">{nameOf(z)}</span>
+                            <span dir="auto" className="min-w-0 flex-1 truncate text-start">
+                              {nameOf(z)}
+                            </span>
                             <span
                               className={`border px-2 py-0.5 font-mono text-[10px] tracking-[0.12em] uppercase ${z.selected ? 'border-alert bg-alert text-void' : 'border-dashed border-accent text-accent'}`}
                             >
@@ -342,6 +362,42 @@ export function Review({
                       );
                     })}
                   </div>
+                  {g.cat === 'face' && styleOf('face') === 'emoji' && (
+                    <fieldset className="m-0 mt-2 border-0 p-0">
+                      <legend className="mb-1.5 p-0 text-[13px] text-dim">{t('review.emojiLegend')}</legend>
+                      <div className="flex flex-wrap gap-1.5">
+                        {['mix', ...EMOJIS].map((e) => {
+                          const on = (styles.emoji ?? 'mix') === e;
+                          return (
+                            <label
+                              key={e}
+                              className={`grid min-h-11 min-w-11 cursor-pointer place-items-center border px-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent ${on ? 'border-accent bg-accent/10' : 'border-line hover:border-edge'}`}
+                            >
+                              <input
+                                type="radio"
+                                name="mask-emoji"
+                                value={e}
+                                checked={on}
+                                onChange={() => setStyles((prev) => ({ ...prev, emoji: e }))}
+                                aria-label={e === 'mix' ? t('review.emojiMix') : e}
+                                className="sr-only"
+                              />
+                              <span
+                                aria-hidden="true"
+                                className={
+                                  e === 'mix'
+                                    ? `font-mono text-[11px] tracking-[0.1em] uppercase ${on ? 'text-accent' : 'text-soft'}`
+                                    : 'text-[22px] leading-none'
+                                }
+                              >
+                                {e === 'mix' ? t('review.emojiMix') : e}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  )}
                 </fieldset>
               ))}
               <p className="mt-3 mb-0 text-[13px] text-dim">{t('review.styleNote')}</p>

@@ -10,16 +10,19 @@ import {
   type TensorLike,
 } from './common.ts';
 
-export const DET_LIMIT = 960;
+/** Longest side the detector sees. Small images are scaled up to it too: on the eval set, text
+ * coverage goes from 68% at 960 px to 79% at 1600 px (pnpm eval). */
+export const DET_LIMIT = 1600;
 export const DET_THRESH = 0.3;
 export const DET_BOX_THRESH = 0.5;
-export const DET_UNCLIP = 1.6;
+/** Box growth around the detected core; 2.0 covers word edges better than PaddleOCR's 1.5. */
+export const DET_UNCLIP = 2.0;
 export const DET_MIN_SIDE = 3;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
 export function detSize(width: number, height: number, limit = DET_LIMIT) {
-  const ratio = Math.max(width, height) > limit ? limit / Math.max(width, height) : 1;
+  const ratio = limit / Math.max(width, height);
   const round = (v: number) => Math.max(32, Math.round((v * ratio) / 32) * 32);
   return { w: round(width), h: round(height) };
 }
@@ -118,8 +121,6 @@ export async function detectText(src: ImageSource, run: Runner): Promise<Scored[
 export const REC_HEIGHT = 48;
 export const REC_MAX_WIDTH = 1280;
 export const REC_MAX_BOXES = 40;
-/** Mean probability below which a decoded line is treated as noise and left unread. */
-export const REC_MIN_SCORE = 0.5;
 
 /** Width at height 48 keeping aspect, rounded up to a multiple of 8 and capped. */
 export function recWidth(w: number, h: number): number {
@@ -195,6 +196,10 @@ export function largest<T extends Rect>(boxes: T[], limit = REC_MAX_BOXES): T[] 
   return [...boxes].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, limit);
 }
 
+/**
+ * One reader's reading of a box: text and mean probability, with no threshold (which reading
+ * counts is decided across readers, see readers.ts). Null for boxes too small to read.
+ */
 export async function recognizeText(
   src: ImageSource,
   box: Rect,
@@ -205,6 +210,21 @@ export async function recognizeText(
   const out = await run({ x: recInput(src, box) });
   const t = Object.values(out)[0]!;
   const [, steps = 0, classes = 0] = t.dims;
-  const r = ctcDecode(t.data as Float32Array, steps, classes, dict);
-  return r.text && r.score >= REC_MIN_SCORE ? r : null;
+  return ctcDecode(t.data as Float32Array, steps, classes, dict);
+}
+
+/**
+ * One reader's readings of many boxes, in the same order (null for boxes too small to read).
+ * Boxes are read one at a time: batching them (padded to a common width) was slower in the
+ * browser on the eval set (1290 against 1166 ms per photo) and changed some readings.
+ */
+export async function readTexts(
+  src: ImageSource,
+  boxes: Rect[],
+  run: Runner,
+  dict: readonly string[],
+): Promise<({ text: string; score: number } | null)[]> {
+  const out: ({ text: string; score: number } | null)[] = [];
+  for (const box of boxes) out.push(await recognizeText(src, box, run, dict));
+  return out;
 }

@@ -7,9 +7,10 @@ export const SOURCE_URL = 'https://github.com/bryneTane/terces';
 const MODEL_ROLE: Record<string, string> = {
   yunet: 'cat.face',
   'ppocr-det': 'cat.text',
-  'ppocr-rec-latin': 'cat.text',
   'yolox-nano': 'cat.person',
 };
+/** Role shown for a manifest model; every text reader (one per alphabet) is a text model. */
+const roleOf = (name: string) => MODEL_ROLE[name] ?? (name.startsWith('ppocr-rec-') ? 'cat.text' : undefined);
 
 function Section({ title, icon, children }: { title: string; icon: IconName; children: React.ReactNode }) {
   return (
@@ -27,7 +28,7 @@ function Section({ title, icon, children }: { title: string; icon: IconName; chi
 
 export function About({ onBack }: { onBack: () => void }) {
   const { t } = useI18n();
-  const models = manifest.models.filter((m) => m.name in MODEL_ROLE);
+  const models = manifest.models.filter((m) => roleOf(m.name));
   return (
     <article className="mx-auto grid w-full max-w-[860px] gap-5 px-4 pt-8 pb-20 text-[15px] leading-relaxed text-soft sm:px-8 sm:pt-12 [&_p]:m-0">
       <button type="button" onClick={onBack} className="btn-ghost justify-self-start">
@@ -83,7 +84,7 @@ export function About({ onBack }: { onBack: () => void }) {
         <ul className="m-0 grid list-none gap-2 p-0 font-mono text-[13px]" data-testid="model-list">
           {models.map((m) => (
             <li key={m.name} className="border-b border-line pb-2 last:border-b-0">
-              <span className="text-accent">{t(MODEL_ROLE[m.name]!)}</span> · {m.source} · {m.license}
+              <span className="text-accent">{t(roleOf(m.name)!)}</span> · {m.source} · {m.license}
             </li>
           ))}
         </ul>

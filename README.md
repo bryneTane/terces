@@ -63,12 +63,19 @@ All models run on the device with ONNX Runtime Web. Sources, licenses, sizes and
 are pinned in [`models/manifest.json`](models/manifest.json); `pnpm models:fetch` refuses any file
 that does not match.
 
-| Finds                         | Model                               | License    |
-| ----------------------------- | ----------------------------------- | ---------- |
-| Faces                         | YuNet (OpenCV Zoo, 2023mar)         | MIT        |
-| Text (detection)              | PaddleOCR PP-OCRv5 mobile det       | Apache-2.0 |
-| Text (reading)                | PaddleOCR PP-OCRv5 Latin mobile rec | Apache-2.0 |
-| People, vehicles (for plates) | YOLOX-Nano (Megvii)                 | Apache-2.0 |
+| Finds                         | Model                                                  | License    |
+| ----------------------------- | ------------------------------------------------------ | ---------- |
+| Faces                         | YuNet (OpenCV Zoo, 2023mar)                            | MIT        |
+| Text (detection)              | PaddleOCR PP-OCRv5 mobile det                          | Apache-2.0 |
+| Text (reading)                | PaddleOCR PP-OCRv5 mobile rec, one reader per alphabet | Apache-2.0 |
+| People, vehicles (for plates) | YOLOX-Nano (Megvii)                                    | Apache-2.0 |
+
+Text is read in Latin alphabets, Chinese, Japanese, Korean, Cyrillic, Arabic, Devanagari, Thai,
+Greek, Tamil and Telugu. Every detected text is covered whatever its alphabet; reading only gives
+each zone its name. The Latin reader ships with the app; the others (about 22 MB) are downloaded
+the first time a photo has text and kept for offline use. `pnpm models:fetch` stores their weights
+in 8 bits ([`scripts/onnx-int8.ts`](scripts/onnx-int8.ts)), which makes them about 3.6 times
+smaller with the same accuracy.
 
 Offline place names ("near Lyon, FR") come from a bundled town list, never from a network lookup:
 map outlines from Natural Earth (public domain), town names from GeoNames (CC BY 4.0). See

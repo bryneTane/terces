@@ -1,13 +1,14 @@
 // Scan pipeline: ordered stages that stream findings.
-// Order: faces, text detection, text recognition (updates text findings by id), people and
-// vehicles, then plate reclassification (updates). Vehicles feed the plate rule and are never
+// Order: faces, text detection, text reading in every alphabet (updates text findings by id),
+// people and vehicles, then plate reclassification (updates). Vehicles feed the plate rule and are never
 // reported as findings.
 import { reclassifyPlates } from '../lib/plates.ts';
 import type { Rect, VisualFinding } from '../lib/types.ts';
 import type { ImageSource, Runner, Scored, TensorLike } from './models/common.ts';
 import { detectFaces as yunetDetect } from './models/yunet.ts';
-import { detectText as ppocrDetect, largest, recognizeText as ppocrRecognize } from './models/ppocr.ts';
+import { detectText as ppocrDetect, largest, readTexts as ppocrRead } from './models/ppocr.ts';
 import { detectObjects as yoloxDetect, type ObjectDetection } from './models/yolox.ts';
+import { chooseReading, READERS, type Reading } from './models/readers.ts';
 import type { ScanCategory, Stage } from './protocol.ts';
 
 export interface ScanContext {
@@ -15,8 +16,8 @@ export interface ScanContext {
   categories: ScanCategory[];
   /** Runner for a manifest model, reporting load progress under `stage`. */
   runner: (model: string, stage: Stage) => Runner;
-  /** The recognition dictionary (manifest file `ppocr-dict-latin`). */
-  dict?: () => Promise<readonly string[]>;
+  /** A reader's dictionary by manifest name (`ppocr-dict-<alphabet>`). */
+  dict?: (name: string) => Promise<readonly string[]>;
   emit: (finding: VisualFinding) => void;
   cancelled: () => boolean;
 }
@@ -36,19 +37,20 @@ export type ScanStage = {
 export interface Detectors {
   detectFaces: (src: ImageSource, run: Runner, cancelled?: () => boolean) => Promise<Scored[]>;
   detectText: (src: ImageSource, run: Runner) => Promise<Scored[]>;
-  recognizeText: (
+  /** One reader's readings of many boxes, same order, null for unreadable boxes. */
+  readTexts: (
     src: ImageSource,
-    box: Rect,
+    boxes: Rect[],
     run: Runner,
     dict: readonly string[],
-  ) => Promise<{ text: string; score: number } | null>;
+  ) => Promise<({ text: string; score: number } | null)[]>;
   detectObjects: (src: ImageSource, run: Runner) => Promise<ObjectDetection[]>;
 }
 
 const DEFAULT_DETECTORS: Detectors = {
   detectFaces: yunetDetect,
   detectText: ppocrDetect,
-  recognizeText: ppocrRecognize,
+  readTexts: ppocrRead,
   detectObjects: yoloxDetect,
 };
 
@@ -86,15 +88,35 @@ export function createStages(partial: Partial<Detectors> = {}): ScanStage[] {
     {
       name: 'text-rec',
       category: 'text',
+      // Every reader reads every box, then one reading per box is chosen (readers.ts). The boxes
+      // stay covered whatever is read: reading only names them. Readers other than Latin are
+      // downloaded the first time; one that cannot load (offline before that) is skipped.
       run: async (ctx, state) => {
         const texts = largest(textFindings(state).map((f) => ({ ...f.box, score: f.score, f })));
         if (!texts.length || !ctx.dict) return;
-        const dict = await ctx.dict();
-        const run = ctx.runner('ppocr-rec-latin', 'text-rec');
+        const reads = new Map<string, Map<string, Reading>>();
+        for (const reader of READERS) {
+          try {
+            const dict = await ctx.dict(`ppocr-dict-${reader.key}`);
+            const run = ctx.runner(`ppocr-rec-${reader.key}`, 'text-rec');
+            if (ctx.cancelled()) return;
+            const rs = await d.readTexts(
+              ctx.source,
+              texts.map(({ f }) => f.box),
+              run,
+              dict,
+            );
+            texts.forEach(({ f }, i) => {
+              const r = rs[i];
+              if (r) reads.set(f.id, (reads.get(f.id) ?? new Map()).set(reader.key, r));
+            });
+          } catch (e) {
+            if (reader.key === 'latin') throw e;
+          }
+        }
         for (const { f } of texts) {
-          if (ctx.cancelled()) return;
-          const r = await d.recognizeText(ctx.source, f.box, run, dict);
-          if (r) ctx.emit({ ...f, text: r.text });
+          const text = chooseReading(reads.get(f.id) ?? new Map());
+          if (text) ctx.emit({ ...f, text });
         }
       },
     },
