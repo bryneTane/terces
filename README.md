@@ -134,7 +134,8 @@ pnpm wrangler pages secret put ACCESS_AUD --project-name terces           # the 
 ```
 
 Add `--env preview` to set them for previews too. Without them the admin page refuses everyone,
-and a production deploy stops. For `wrangler pages dev`, put them in `.dev.vars` (not committed).
+and a production deploy stops. For `wrangler pages dev`, copy `.env.example` to `.env` (not
+committed) and fill it in.
 
 ## License
 
