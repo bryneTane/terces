@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
 import { expect, test } from 'vitest';
-import { lastDays, onRequest, readStats, type Stats } from '../../functions/api/admin/stats.ts';
+import { lastDays, onRequest, readStats, type Stats } from '../../functions/admin/stats.ts';
 import { createD1 } from './d1.ts';
 
 const NOW = new Date('2026-11-07T10:00:00Z');
@@ -42,7 +42,7 @@ test('the endpoint needs Access and is never cached', async () => {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const keys = createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), kid: 'k', alg: 'RS256' }] });
   const env = { DB: seeded(), ACCESS_TEAM_DOMAIN: 't.cloudflareaccess.com', ACCESS_AUD: 'aud' };
-  const url = 'https://terces.example/api/admin/stats';
+  const url = 'https://terces.example/admin/stats';
 
   const denied = await onRequest({ request: new Request(url), env }, keys);
   expect(denied.status).toBe(401);

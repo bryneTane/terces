@@ -22,7 +22,7 @@ beforeAll(async () => {
 });
 
 const req = (token?: string) =>
-  new Request('https://terces.example/api/admin/stats', {
+  new Request('https://terces.example/admin/stats', {
     headers: token ? { 'Cf-Access-Jwt-Assertion': token } : {},
   });
 

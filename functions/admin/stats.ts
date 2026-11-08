@@ -1,6 +1,7 @@
-// GET /api/admin/stats: today, last 30 UTC days (newest first, zero-filled), totals, cloak rate.
-import { verifyAccess } from '../../_lib/access.ts';
-import { utcDay, type Context, type Env } from '../../_lib/env.ts';
+// GET /admin/stats: today, last 30 UTC days (newest first, zero-filled), totals, cloak rate.
+// Under /admin, so the Access app guards it at the edge and adds its signed header, like the page.
+import { verifyAccess } from '../_lib/access.ts';
+import { utcDay, type Context, type Env } from '../_lib/env.ts';
 
 export interface DayCount {
   day: string;

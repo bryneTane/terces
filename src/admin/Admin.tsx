@@ -1,4 +1,4 @@
-// The usage dashboard: stat tiles and the 30 day chart, fed by /api/admin/stats.
+// The usage dashboard: stat tiles and the 30 day chart, fed by /admin/stats.
 import { useEffect, useState } from 'react';
 import { BarChart, type DayCount } from './Chart.tsx';
 
@@ -15,7 +15,7 @@ export type State =
 const fmt = new Intl.NumberFormat('en');
 
 async function loadStats(): Promise<State> {
-  // The Vite dev server has no Functions: /api/admin/stats would return the app's HTML.
+  // The Vite dev server has no Functions: /admin/stats would return the app's HTML.
   if (import.meta.env.DEV)
     return {
       kind: 'error',
@@ -23,7 +23,7 @@ async function loadStats(): Promise<State> {
         'The dev server has no stats API. Run "pnpm build && pnpm wrangler pages dev dist" to see real numbers.',
     };
   try {
-    const r = await fetch('/api/admin/stats', { credentials: 'same-origin', cache: 'no-store' });
+    const r = await fetch('/admin/stats', { credentials: 'same-origin', cache: 'no-store' });
     if (r.status === 401)
       return { kind: 'error', message: 'Not authorized. Sign in through Cloudflare Access and reload.' };
     if (!r.ok) return { kind: 'error', message: `Could not load stats (HTTP ${r.status}).` };
