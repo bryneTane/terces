@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { detectFaces, yunetDecode, yunetRegions } from '../../src/worker/models/yunet.ts';
-import { iou, nms, tiles } from '../../src/worker/models/common.ts';
+import { coverage, iou, nms, tiles } from '../../src/worker/models/common.ts';
 import { imageSource, runner } from './model-helpers.ts';
 
 describe('YuNet helpers', () => {
@@ -55,6 +55,17 @@ describe('tiles / nms', () => {
     );
     expect(kept.map((k) => k.score)).toEqual([0.9, 0.7]);
     expect(iou({ x: 0, y: 0, w: 10, h: 10 }, { x: 0, y: 0, w: 10, h: 10 })).toBe(1);
+  });
+
+  it('drops a box nested in a better one only when asked', () => {
+    const boxes = [
+      { x: 0, y: 0, w: 100, h: 120, score: 0.9 },
+      { x: 40, y: 50, w: 60, h: 60, score: 0.76 }, // IoU 0.3, fully inside
+      { x: 90, y: 0, w: 100, h: 120, score: 0.8 }, // a neighbour, barely touching
+    ];
+    expect(coverage(boxes[0]!, boxes[1]!)).toBe(1);
+    expect(nms(boxes, 0.3)).toHaveLength(3);
+    expect(nms(boxes, 0.3, 0.6).map((k) => k.score)).toEqual([0.9, 0.8]);
   });
 });
 

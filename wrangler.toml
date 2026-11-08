@@ -5,7 +5,7 @@ compatibility_date = "2026-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "terces-usage"
-database_id = "00000000-0000-0000-0000-000000000000" # filled after `wrangler d1 create terces-usage`
+database_id = "d73fbcc6-45af-4cb0-8c84-ffe683343617"
 migrations_dir = "migrations"
 
 [vars]

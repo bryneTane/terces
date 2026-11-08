@@ -8,6 +8,7 @@ import {
   type Runner,
   type Scored,
   type TensorLike,
+  type Tilt,
 } from './common.ts';
 
 /** Longest side the detector sees. Small images are scaled up to it too: on the eval set, text
@@ -18,6 +19,10 @@ export const DET_BOX_THRESH = 0.5;
 /** Box growth around the detected core; 2.0 covers word edges better than PaddleOCR's 1.5. */
 export const DET_UNCLIP = 2.0;
 export const DET_MIN_SIDE = 3;
+/** Text tilted less than this (degrees) is read from its straight box. */
+export const TILT_MIN_DEG = 4;
+/** Regions must be at least this much longer than thick for their angle to mean anything. */
+export const TILT_MIN_ELONGATION = 1.5;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
@@ -48,6 +53,7 @@ export function dbPostprocess(
   const labels = new Int32Array(mapW * mapH);
   const boxes: Scored[] = [];
   const stack: number[] = [];
+  const region: number[] = [];
   let next = 0;
   for (let start = 0; start < prob.length; start++) {
     if (labels[start] !== 0 || prob[start]! <= DET_THRESH) continue;
@@ -60,8 +66,10 @@ export function dbPostprocess(
       n = 0;
     stack.push(start);
     labels[start] = next;
+    region.length = 0;
     while (stack.length) {
       const p = stack.pop()!;
+      region.push(p);
       const x = p % mapW;
       const y = (p - x) / mapW;
       sum += prob[p]!;
@@ -95,9 +103,66 @@ export function dbPostprocess(
       w: (w + 2 * d) * scaleX,
       h: (h + 2 * d) * scaleY,
     };
-    boxes.push({ ...clampRect(r, srcW, srcH), score });
+    const tilt = tiltOf(region, mapW, scaleX, scaleY);
+    boxes.push({ ...clampRect(r, srcW, srcH), score, ...(tilt ? { tilt } : {}) });
   }
   return boxes;
+}
+
+/**
+ * The region (map pixel indices) as a rotated rectangle in source pixels, from its principal
+ * axis, grown like the straight box (PaddleOCR reads tilted text from such a rectangle). Null
+ * when the text is level or vertical, or the region too round for its angle to mean anything.
+ */
+export function tiltOf(region: readonly number[], mapW: number, scaleX: number, scaleY: number): Tilt | null {
+  const n = region.length;
+  if (n < 2) return null;
+  let mx = 0,
+    my = 0;
+  for (const p of region) {
+    mx += ((p % mapW) + 0.5) * scaleX;
+    my += (Math.floor(p / mapW) + 0.5) * scaleY;
+  }
+  mx /= n;
+  my /= n;
+  let xx = 0,
+    yy = 0,
+    xy = 0;
+  for (const p of region) {
+    const dx = ((p % mapW) + 0.5) * scaleX - mx;
+    const dy = (Math.floor(p / mapW) + 0.5) * scaleY - my;
+    xx += dx * dx;
+    yy += dy * dy;
+    xy += dx * dy;
+  }
+  const angle = 0.5 * Math.atan2(2 * xy, xx - yy);
+  const deg = Math.abs((angle * 180) / Math.PI);
+  if (deg < TILT_MIN_DEG || deg > 90 - TILT_MIN_DEG) return null;
+  const [ux, uy, vx, vy] = [Math.cos(angle), Math.sin(angle), -Math.sin(angle), Math.cos(angle)];
+  let u0 = Infinity,
+    u1 = -Infinity,
+    v0 = Infinity,
+    v1 = -Infinity;
+  for (const p of region) {
+    const dx = ((p % mapW) + 0.5) * scaleX - mx;
+    const dy = (Math.floor(p / mapW) + 0.5) * scaleY - my;
+    const u = dx * ux + dy * uy;
+    const v = dx * vx + dy * vy;
+    if (u < u0) u0 = u;
+    if (u > u1) u1 = u;
+    if (v < v0) v0 = v;
+    if (v > v1) v1 = v;
+  }
+  const cell = Math.max(scaleX, scaleY);
+  let len = u1 - u0 + cell;
+  let thick = v1 - v0 + cell;
+  if (len < TILT_MIN_ELONGATION * thick) return null;
+  const d = (len * thick * DET_UNCLIP) / (2 * (len + thick));
+  len += 2 * d;
+  thick += 2 * d;
+  const cu = (u0 + u1) / 2;
+  const cv = (v0 + v1) / 2;
+  return { cx: mx + cu * ux + cv * vx, cy: my + cu * uy + cv * vy, len, thick, angle };
 }
 
 export async function detectText(src: ImageSource, run: Runner): Promise<Scored[]> {
@@ -127,22 +192,45 @@ export function recWidth(w: number, h: number): number {
   return Math.min(REC_MAX_WIDTH, Math.max(8, Math.ceil((REC_HEIGHT * w) / Math.max(1, h) / 8) * 8));
 }
 
+/** A detected text box, with its rotated rectangle when the text is tilted. */
+export type TextBox = Rect & { tilt?: Tilt };
+
 /** Tall boxes hold vertical text, read after turning it horizontal. */
 export const isVertical = (box: Rect) => box.h > 1.5 * box.w;
 
 /**
  * Crop a box to a 1x3x48xW tensor, BGR, (v/255 - 0.5)/0.5. Vertical boxes are rotated to
  * horizontal: counter-clockwise (text that runs bottom to top), or clockwise when `clockwise`.
+ * `mirror` flips the crop left to right first (text seen in a mirror).
  */
-export function recInput(src: ImageSource, box: Rect, clockwise = false): TensorLike {
+export function recInput(src: ImageSource, box: TextBox, clockwise = false, mirror = false): TensorLike {
+  if (box.tilt && src.rotated) {
+    // Tilted text: read the region turned level (its own rotated rectangle).
+    const W = recWidth(box.tilt.len, box.tilt.thick);
+    let px = src.rotated(box.tilt, W, REC_HEIGHT);
+    if (mirror) px = flipX(px);
+    return { data: toCHW(px, 'bgr', (v) => (v / 255 - 0.5) / 0.5), dims: [1, 3, REC_HEIGHT, W] };
+  }
   const rotate = isVertical(box);
   const [bw, bh] = rotate ? [box.h, box.w] : [box.w, box.h];
   const W = recWidth(bw, bh);
   let px = rotate
-    ? rotate90(src.pixels(box.x, box.y, box.w, box.h, REC_HEIGHT, W))
+    ? src.pixels(box.x, box.y, box.w, box.h, REC_HEIGHT, W)
     : src.pixels(box.x, box.y, box.w, box.h, W, REC_HEIGHT);
+  if (mirror) px = flipX(px);
+  if (rotate) px = rotate90(px);
   if (rotate && clockwise) px = rotate180(px);
   return { data: toCHW(px, 'bgr', (v) => (v / 255 - 0.5) / 0.5), dims: [1, 3, REC_HEIGHT, W] };
+}
+
+/** Flip RGBA pixels left to right. */
+export function flipX(px: Pixels): Pixels {
+  const { width: w, height: h, data } = px;
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      out.set(data.subarray((y * w + x) * 4, (y * w + x) * 4 + 4), (y * w + (w - 1 - x)) * 4);
+  return { data: out, width: w, height: h };
 }
 
 /** Rotate RGBA pixels by 180 degrees. */
@@ -217,19 +305,21 @@ export function largest<T extends Rect>(boxes: T[], limit = REC_MAX_BOXES): T[] 
  */
 export async function recognizeText(
   src: ImageSource,
-  box: Rect,
+  box: TextBox,
   run: Runner,
   dict: readonly string[],
+  mirror = false,
 ): Promise<{ text: string; score: number } | null> {
   if (box.w < 2 || box.h < 2) return null;
   const read = async (clockwise: boolean) => {
-    const out = await run({ x: recInput(src, box, clockwise) });
+    const out = await run({ x: recInput(src, box, clockwise, mirror) });
     const t = Object.values(out)[0]!;
     const [, steps = 0, classes = 0] = t.dims;
     return ctcDecode(t.data as Float32Array, steps, classes, dict);
   };
   const a = await read(false);
-  if (!isVertical(box)) return a;
+  // Tilted text is read from its own rotated rectangle, once.
+  if (!isVertical(box) || (box.tilt && src.rotated)) return a;
   // Vertical text runs either way (labels top to bottom, spines bottom to top): keep the surer reading.
   const b = await read(true);
   return b.score > a.score ? b : a;
@@ -242,11 +332,12 @@ export async function recognizeText(
  */
 export async function readTexts(
   src: ImageSource,
-  boxes: Rect[],
+  boxes: TextBox[],
   run: Runner,
   dict: readonly string[],
+  mirror = false,
 ): Promise<({ text: string; score: number } | null)[]> {
   const out: ({ text: string; score: number } | null)[] = [];
-  for (const box of boxes) out.push(await recognizeText(src, box, run, dict));
+  for (const box of boxes) out.push(await recognizeText(src, box, run, dict, mirror));
   return out;
 }

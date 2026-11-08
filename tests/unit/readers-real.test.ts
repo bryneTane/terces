@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Real models (onnxruntime-node) on text rendered in several alphabets, through the scan stages.
 // Needs system fonts for each script (macOS has them); a script without a font is skipped.
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts, type Canvas } from '@napi-rs/canvas';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createStages, runScan } from '../../src/worker/scan.ts';
@@ -21,27 +21,52 @@ const WORDS: [text: string, fonts: string[]][] = [
 
 const installed = new Set(GlobalFonts.families.map((f) => f.family));
 
-function sign(text: string, font: string): ImageSource {
-  const c = createCanvas(640, 160);
+/** A sign with `text`; tilted and mirrored ones are drawn centred on a larger card. */
+function sign(text: string, font: string, { tilt = 0, mirror = false } = {}): ImageSource {
+  const plain = !tilt && !mirror;
+  const [W, H] = plain ? [640, 160] : [800, 500];
+  const c = createCanvas(W, H);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#f4f1e8';
-  ctx.fillRect(0, 0, 640, 160);
+  ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#111';
   ctx.font = `64px "${font}"`;
-  ctx.fillText(text, 40, 105);
+  if (plain) ctx.fillText(text, 40, 105);
+  else {
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate((tilt * Math.PI) / 180);
+    if (mirror) ctx.scale(-1, 1);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 0, 0);
+  }
 
+  const read = (draw: (o: Canvas) => void, dw: number, dh: number) => {
+    const out = createCanvas(dw, dh);
+    draw(out);
+    return {
+      data: out.getContext('2d').getImageData(0, 0, dw, dh).data as unknown as Uint8ClampedArray,
+      width: dw,
+      height: dh,
+    };
+  };
   return {
-    width: 640,
-    height: 160,
-    pixels(sx, sy, sw, sh, dw, dh) {
-      const out = createCanvas(dw, dh);
-      out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, dw, dh);
-      return {
-        data: out.getContext('2d').getImageData(0, 0, dw, dh).data as unknown as Uint8ClampedArray,
-        width: dw,
-        height: dh,
-      };
-    },
+    width: W,
+    height: H,
+    pixels: (sx, sy, sw, sh, dw, dh) =>
+      read((o) => o.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, dw, dh), dw, dh),
+    rotated: (t, dw, dh) =>
+      read(
+        (o) => {
+          const g = o.getContext('2d');
+          g.setTransform(dw / t.len, 0, 0, dh / t.thick, dw / 2, dh / 2);
+          g.rotate(-t.angle);
+          g.translate(-t.cx, -t.cy);
+          g.drawImage(c, 0, 0);
+        },
+        dw,
+        dh,
+      ),
   };
 }
 
@@ -55,6 +80,35 @@ const run =
   };
 const dict = async (name: string) =>
   JSON.parse(readFileSync(`public/models/${files[name]}`, 'utf8')) as string[];
+
+describe('tilted and mirrored text (real models)', () => {
+  const font = ['Helvetica Neue', 'Arial', 'DejaVu Sans'].find((f) => installed.has(f));
+  for (const [tilt, mirror] of [
+    [20, false],
+    [-25, false],
+    [0, true],
+    [22, true],
+  ] as const)
+    it.skipIf(!font)(
+      `reads text tilted ${tilt}°${mirror ? ', mirrored' : ''}`,
+      async () => {
+        const names: string[] = [];
+        await runScan(
+          {
+            source: sign('AVENGERS', font!, { tilt, mirror }),
+            runner: (m) => run(m),
+            dict,
+            categories: ['text'],
+            emit: (f) => void (f.text && names.push(f.text)),
+            cancelled: () => false,
+          },
+          createStages().filter((s) => s.name === 'text-det' || s.name === 'text-rec'),
+        );
+        expect(names.join(' ').toUpperCase()).toContain('AVENGERS');
+      },
+      60_000,
+    );
+});
 
 describe('reading text in every alphabet (real models)', () => {
   for (const [text, fonts] of WORDS) {

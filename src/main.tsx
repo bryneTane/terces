@@ -5,6 +5,8 @@ import './styles/index.css';
 import { detectLocale, readStoredLocale, type Locale } from './i18n.tsx';
 import { Root } from './Root.tsx';
 import { registerSW } from 'virtual:pwa-register';
+// Listens for the browser's install offer from the start (it can come before React renders).
+import './lib/install.ts';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root element');

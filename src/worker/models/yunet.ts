@@ -15,6 +15,9 @@ export const YUNET_SIZE = 640;
 // 0.6 (plan) let a clasped-hands false positive through at 0.647 on group-faces.jpg; real faces score ~0.93.
 export const YUNET_SCORE = 0.7;
 export const YUNET_NMS = 0.3;
+// Two faces never sit inside each other: a box mostly inside a better one is the same face, seen
+// partly by a tile (a 0.76 box nested in a selfie face at IoU 0.29 showed up as a second face).
+export const YUNET_WITHIN = 0.6;
 const STRIDES = [8, 16, 32] as const;
 
 /** Prepare one 640x640 input from a source region (letterboxed, top-left anchored). */
@@ -84,5 +87,5 @@ export async function detectFaces(
     const { tensor, scale } = yunetInput(src, region);
     all.push(...yunetDecode(await run({ input: tensor }), region, scale));
   }
-  return nms(all, YUNET_NMS);
+  return nms(all, YUNET_NMS, YUNET_WITHIN);
 }

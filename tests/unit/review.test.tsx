@@ -31,6 +31,22 @@ describe('Review', () => {
     expect(screen.getByRole('button', { name: 'Cloak · 0 zones' })).toBeEnabled();
   });
 
+  it('starts on the draw tool when nothing was detected, on select otherwise', () => {
+    show(session());
+    expect(screen.getByRole('button', { name: /Draw a zone/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('starts on select when there are zones', () => {
+    show(
+      session({
+        zones: [
+          { id: 'z', kind: 'detected', category: 'face', rect: { x: 0, y: 0, w: 10, h: 10 }, selected: true },
+        ],
+      }),
+    );
+    expect(screen.getByRole('button', { name: /Select/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('says logos, crests, badges and uniforms are left to the person', () => {
     show(session());
     expect(screen.getByTestId('review-check')).toHaveTextContent(

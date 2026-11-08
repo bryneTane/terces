@@ -8,7 +8,7 @@ import { placeLabel } from '../lib/geo.ts';
 import { warmModelCache } from '../lib/modelCache.ts';
 import { readMetadata } from '../lib/metadata.ts';
 import { InferenceClient, createInferenceWorker } from '../worker/client.ts';
-import type { FromWorker } from '../worker/protocol.ts';
+import type { FromWorker, Stage, StepPart } from '../worker/protocol.ts';
 import { useSession } from './SessionProvider.tsx';
 
 /** Long side of the copy sent to the detector (bounds memory; boxes are scaled back). */
@@ -16,8 +16,11 @@ export const DETECTION_MAX_SIDE = 3072;
 
 export interface ScannerStatus {
   ready: boolean;
+  /** Share of the first model download done, before the scanner is ready. */
   progress: number;
   error: string | null;
+  /** The scan stage running now, for the photo with this session id. */
+  step?: { id: string; stage: Stage; part?: StepPart };
 }
 
 let ids = 0;
@@ -64,11 +67,14 @@ export function usePipeline(
         case 'progress': {
           loaded[m.stage] = [m.loaded, m.total];
           const [l, t] = Object.values(loaded).reduce(([a, b], [x, y]) => [a + x, b + y], [0, 0]);
-          setScanner((p) => ({ ...p, progress: t ? l / t : 0 }));
+          setScanner((p) => (p.ready ? p : { ...p, progress: t ? l / t : 0 }));
           break;
         }
+        case 'step':
+          setScanner((p) => ({ ...p, step: { id: m.sessionId, stage: m.stage, part: m.part } }));
+          break;
         case 'ready':
-          setScanner({ ready: true, progress: 1, error: null });
+          setScanner((p) => ({ ...p, ready: true, progress: 1, error: null }));
           // Once the runtime is up, fetch every model in the background so the next visit
           // works offline. Files already cached are skipped; the download waits while busy.
           void warmModelCache(undefined, undefined, waitUntilIdle).then((ok) => {

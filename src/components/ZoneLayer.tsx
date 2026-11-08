@@ -27,7 +27,10 @@ export interface ZoneLayerProps {
    * Called once, on release.
    */
   onResize?: (id: string, rect: Rect) => void;
-  /** `draw`: taps do nothing, only drags (draw a zone). Default `select`: taps toggle, drags draw. */
+  /**
+   * `draw`: drags draw a zone, taps do nothing. Default `select`: taps toggle, drags move drawn
+   * zones and resize from the corners, and never draw.
+   */
   tool?: Tool;
   /** Zone highlighted from outside (the findings list), and hover reporting back. */
   hover?: string | null;
@@ -37,9 +40,9 @@ export interface ZoneLayerProps {
 }
 
 /**
- * Zones over the photo. Display-only without handlers. With handlers: a tap toggles the smallest
- * zone under it, a drag on a drawn zone moves it, a drag elsewhere draws a manual zone, manual
- * zones have a remove control. Zones are also
+ * Zones over the photo. Display-only without handlers. With handlers, in select: a tap toggles the
+ * smallest zone under it and a drag on a drawn zone moves it; in draw: a drag draws a manual zone.
+ * Manual zones have a remove control. Zones are also
  * focusable buttons so the keyboard can toggle them.
  */
 export function ZoneLayer({
@@ -138,7 +141,8 @@ export function ZoneLayer({
       setLive({ id: s.move.id, rect: { ...r, x, y } });
       return;
     }
-    if (!onAdd) return;
+    // Only the draw tool draws: in select, a drag off a drawn zone does nothing.
+    if (!onAdd || tool !== 'draw') return;
     if (!draft && !far) return;
     const p = toImage(e);
     setDraft({
@@ -187,7 +191,7 @@ export function ZoneLayer({
     <div
       ref={root}
       data-testid="zone-layer"
-      className={`absolute inset-0 ${interactive ? 'pointer-events-auto cursor-crosshair' : ''}`}
+      className={`absolute inset-0 ${interactive ? `pointer-events-auto ${tool === 'draw' ? 'cursor-crosshair' : 'cursor-default'}` : ''}`}
       style={interactive ? { touchAction: 'none' } : undefined}
       onPointerDown={interactive ? onDown : undefined}
       onPointerMove={interactive ? onMove : undefined}

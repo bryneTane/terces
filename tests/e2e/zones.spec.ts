@@ -27,8 +27,17 @@ test('deselect a face, draw a zone, cloak: the face stays, the drawn area is mas
   await expect(covered).toHaveCount(before - 1);
   await expect(page.getByRole('button', { name: /: stays visible/ }).first()).toBeVisible();
 
-  // Draw over the lower-right corner, where nothing is detected.
+  // In select, a drag draws nothing.
   const a = at(1350, 1000);
+  const b0 = at(1550, 1200);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b0.x, b0.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('[data-testid="zone"][data-category="manual"]')).toHaveCount(0);
+
+  // Draw over the lower-right corner, where nothing is detected.
+  await page.getByRole('button', { name: /Draw a zone/ }).click();
   const b = at(1550, 1200);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
@@ -68,7 +77,9 @@ test('a drawn zone can be dragged to another place', async ({ page }) => {
     await page.mouse.move(to.x, to.y, { steps: 4 });
     await page.mouse.up();
   };
+  await page.getByRole('button', { name: /Draw a zone/ }).click();
   await drag(at(1350, 1000), at(1550, 1200));
+  await page.getByRole('button', { name: /Select/ }).click();
   const drawn = page.locator('[data-testid="zone"][data-category="manual"]');
   await expect(drawn).toHaveCount(1);
   const before = (await drawn.boundingBox())!;

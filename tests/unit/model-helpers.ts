@@ -14,6 +14,16 @@ export async function imageSource(path: string): Promise<ImageSource> {
       const d = c.getContext('2d').getImageData(0, 0, dw, dh);
       return { data: d.data as unknown as Uint8ClampedArray, width: dw, height: dh };
     },
+    rotated(t, dw, dh) {
+      const c = createCanvas(dw, dh);
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dw / t.len, 0, 0, dh / t.thick, dw / 2, dh / 2);
+      ctx.rotate(-t.angle);
+      ctx.translate(-t.cx, -t.cy);
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, dw, dh);
+      return { data: d.data as unknown as Uint8ClampedArray, width: dw, height: dh };
+    },
   };
 }
 

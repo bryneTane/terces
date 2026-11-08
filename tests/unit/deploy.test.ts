@@ -11,7 +11,12 @@ import {
   withDatabaseId,
 } from '../../scripts/deploy.ts';
 
-const toml = readFileSync('wrangler.toml', 'utf8');
+// The committed wrangler.toml with its placeholders (the working copy gets real values from
+// `pnpm deploy:setup`, so it cannot be the fixture).
+const toml = readFileSync('wrangler.toml', 'utf8')
+  .replace(/database_id = "[^"]*"[^\n]*/, 'database_id = "00000000-0000-0000-0000-000000000000"')
+  .replace(/ACCESS_TEAM_DOMAIN = "[^"]*"[^\n]*/, 'ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"')
+  .replace(/ACCESS_AUD = "[^"]*"/, 'ACCESS_AUD = "replace-with-access-application-aud-tag"');
 const ready = withDatabaseId(toml, '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b')
   .replace(/ACCESS_TEAM_DOMAIN = "[^"]*"[^\n]*/, 'ACCESS_TEAM_DOMAIN = "me.cloudflareaccess.com"')
   .replace(/ACCESS_AUD = "[^"]*"/, 'ACCESS_AUD = "abc123"');
@@ -25,7 +30,7 @@ describe('deploy script', () => {
     expect(() => parseArgs(['ship'])).toThrow(/usage/);
   });
 
-  it('flags every placeholder in the committed wrangler.toml, and none once filled', () => {
+  it('flags every placeholder in wrangler.toml, and none once filled', () => {
     expect(configProblems(toml, 'prod').errors).toHaveLength(3);
     expect(configProblems(ready, 'prod')).toEqual({ errors: [], warnings: [] });
   });

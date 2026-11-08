@@ -10,6 +10,8 @@ import {
   recognizeText,
   rotate90,
   rotate180,
+  flipX,
+  tiltOf,
 } from '../../src/worker/models/ppocr.ts';
 import { iou } from '../../src/worker/models/common.ts';
 import { imageSource, runner } from './model-helpers.ts';
@@ -77,7 +79,45 @@ describe('recognition helpers', () => {
   });
 });
 
+describe('tilted text', () => {
+  /** Map pixel indices of a band `len` x `thick` at `deg` degrees around (cx, cy). */
+  const band = (deg: number, len = 60, thick = 8, mapW = 200, cx = 100, cy = 100) => {
+    const a = (deg * Math.PI) / 180;
+    const out: number[] = [];
+    for (let y = 0; y < 200; y++)
+      for (let x = 0; x < mapW; x++) {
+        const dx = x + 0.5 - cx;
+        const dy = y + 0.5 - cy;
+        const u = dx * Math.cos(a) + dy * Math.sin(a);
+        const v = -dx * Math.sin(a) + dy * Math.cos(a);
+        if (Math.abs(u) <= len / 2 && Math.abs(v) <= thick / 2) out.push(y * mapW + x);
+      }
+    return out;
+  };
+
+  it('measures the angle and centre of a tilted text region', () => {
+    for (const deg of [20, -30, 60]) {
+      const t = tiltOf(band(deg), 200, 2, 2)!;
+      expect((t.angle * 180) / Math.PI).toBeCloseTo(deg, 0);
+      expect(t.cx).toBeCloseTo(200, -1);
+      expect(t.cy).toBeCloseTo(200, -1);
+      expect(t.len).toBeGreaterThan(t.thick * 3);
+    }
+  });
+
+  it('leaves level, vertical and round regions to the straight box', () => {
+    expect(tiltOf(band(0), 200, 1, 1)).toBeNull();
+    expect(tiltOf(band(90), 200, 1, 1)).toBeNull();
+    expect(tiltOf(band(30, 10, 10), 200, 1, 1)).toBeNull();
+  });
+});
+
 describe('vertical text', () => {
+  it('flips pixels left to right (text seen in a mirror)', () => {
+    const px = { data: Uint8ClampedArray.from([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]), width: 3, height: 1 };
+    expect([...flipX(px).data]).toEqual([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
+  });
+
   it('rotates pixels 180 degrees', () => {
     const px = { data: Uint8ClampedArray.from([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]), width: 3, height: 1 };
     expect([...rotate180(px).data]).toEqual([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);

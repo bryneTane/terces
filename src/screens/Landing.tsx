@@ -1,3 +1,4 @@
+import { InstallButton } from '../components/InstallButton.tsx';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { HeroPhoto } from '../components/HeroPhoto.tsx';
 import { Icon, Logo, Wordmark, type IconName } from '../components/Icon.tsx';
@@ -200,6 +201,8 @@ export function Landing({ onPick }: { onPick: (file: File) => void }) {
               </div>
               <span className="max-sm:w-full max-sm:[&>button]:w-full">{cta}</span>
             </div>
+            {/* In the first screen, under the main action: the header has no room for it on phones. */}
+            <InstallButton className="mt-4 block" />
 
             <ul className="mt-7 mb-0 flex list-none flex-wrap gap-x-7 gap-y-3 p-0 font-mono text-xs tracking-[0.08em] text-dim">
               {(

@@ -7,11 +7,25 @@ export interface Pixels {
   height: number;
 }
 
+/**
+ * A rotated rectangle in source pixels: centre, length along its long side, thickness across,
+ * and the angle of the long side (radians, clockwise from the x axis, as on screen).
+ */
+export interface Tilt {
+  cx: number;
+  cy: number;
+  len: number;
+  thick: number;
+  angle: number;
+}
+
 /** Draws the source region (sx, sy, sw, sh) scaled to dw x dh and returns RGBA pixels. */
 export interface ImageSource {
   width: number;
   height: number;
   pixels(sx: number, sy: number, sw: number, sh: number, dw: number, dh: number): Pixels;
+  /** The rotated rectangle `t`, turned level and scaled to dw x dh (optional: tilted text). */
+  rotated?(t: Tilt, dw: number, dh: number): Pixels;
 }
 
 export interface TensorLike {
@@ -23,6 +37,8 @@ export type Runner = (feeds: Record<string, TensorLike>) => Promise<Record<strin
 
 export interface Scored extends Rect {
   score: number;
+  /** Text regions only: the region as a rotated rectangle, when it is clearly tilted. */
+  tilt?: Tilt;
 }
 
 export function iou(a: Rect, b: Rect): number {
@@ -35,10 +51,24 @@ export function iou(a: Rect, b: Rect): number {
   return union > 0 ? inter / union : 0;
 }
 
-export function nms<T extends Scored>(boxes: T[], threshold: number): T[] {
+/** Share of `b`'s area that lies inside `a`. */
+export function coverage(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  const area = b.w * b.h;
+  return w > 0 && h > 0 && area > 0 ? (w * h) / area : 0;
+}
+
+/**
+ * Non-maximum suppression. With `within`, a box is also dropped when that share of it lies inside a
+ * better box: IoU alone keeps a small box nested in a large one (for example part of a face, seen by
+ * a tile that cuts it).
+ */
+export function nms<T extends Scored>(boxes: T[], threshold: number, within = 1.01): T[] {
   const sorted = [...boxes].sort((a, b) => b.score - a.score);
   const keep: T[] = [];
-  for (const b of sorted) if (keep.every((k) => iou(k, b) <= threshold)) keep.push(b);
+  for (const b of sorted)
+    if (keep.every((k) => iou(k, b) <= threshold && coverage(k, b) < within)) keep.push(b);
   return keep;
 }
 

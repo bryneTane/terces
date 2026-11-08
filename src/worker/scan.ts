@@ -4,12 +4,12 @@
 // reported as findings.
 import { reclassifyPlates } from '../lib/plates.ts';
 import type { Rect, VisualFinding } from '../lib/types.ts';
-import type { ImageSource, Runner, Scored, TensorLike } from './models/common.ts';
+import type { ImageSource, Runner, Scored, TensorLike, Tilt } from './models/common.ts';
 import { detectFaces as yunetDetect } from './models/yunet.ts';
-import { detectText as ppocrDetect, largest, readTexts as ppocrRead } from './models/ppocr.ts';
+import { detectText as ppocrDetect, largest, readTexts as ppocrRead, type TextBox } from './models/ppocr.ts';
 import { detectObjects as yoloxDetect, type ObjectDetection } from './models/yolox.ts';
 import { bestReading, isRead, READERS, type Reading } from './models/readers.ts';
-import type { ScanCategory, Stage } from './protocol.ts';
+import type { ScanCategory, Stage, StepPart } from './protocol.ts';
 
 export interface ScanContext {
   source: ImageSource;
@@ -20,6 +20,8 @@ export interface ScanContext {
   dict?: (name: string) => Promise<readonly string[]>;
   emit: (finding: VisualFinding) => void;
   cancelled: () => boolean;
+  /** Called as each stage starts (and as a long stage advances), for the progress shown while scanning. */
+  onStage?: (stage: Stage, part?: StepPart) => void;
 }
 
 /** What earlier stages found, for later stages to refine. */
@@ -28,6 +30,8 @@ export interface ScanState {
   vehicles: Rect[];
   /** Text boxes found by detection, waiting to be read: only the ones read become findings. */
   pendingText: VisualFinding[];
+  /** Tilted text regions by finding id, read turned level. */
+  tilts: Map<string, Tilt>;
 }
 
 export type ScanStage = {
@@ -42,9 +46,10 @@ export interface Detectors {
   /** One reader's readings of many boxes, same order, null for unreadable boxes. */
   readTexts: (
     src: ImageSource,
-    boxes: Rect[],
+    boxes: TextBox[],
     run: Runner,
     dict: readonly string[],
+    mirror?: boolean,
   ) => Promise<({ text: string; score: number } | null)[]>;
   detectObjects: (src: ImageSource, run: Runner) => Promise<ObjectDetection[]>;
 }
@@ -85,43 +90,59 @@ export function createStages(partial: Partial<Detectors> = {}): ScanStage[] {
       run: async (ctx, state) => {
         const boxes = await d.detectText(ctx.source, ctx.runner('ppocr-det', 'text-det'));
         state.pendingText = boxes.map(toFinding('text', 'ppocr', 'text'));
+        boxes.forEach((b, i) => b.tilt && state.tilts.set(state.pendingText[i]!.id, b.tilt));
       },
     },
     {
       name: 'text-rec',
       category: 'text',
       // Every reader reads every box, then one reading per box is chosen (readers.ts). Only boxes
-      // that were read are marked: the detector also fires on flowers and faces. Readers other
-      // than Latin are downloaded the first time; one that cannot load (offline before that) is
+      // that were read are marked: the detector also fires on flowers and faces. Boxes nothing
+      // could read are read again mirrored (text seen in a mirror, selfies). Readers other than
+      // Latin are downloaded the first time; one that cannot load (offline before that) is
       // skipped. The Latin reader reads every box; the others, the largest ones (time).
       run: async (ctx, state) => {
         const found = state.pendingText;
         if (!found.length || !ctx.dict) return;
-        const largestOnes = largest(found.map((f) => ({ ...f.box, f }))).map(({ f }) => f);
-        const reads = new Map<string, Map<string, Reading>>();
-        for (const reader of READERS) {
-          try {
-            const dict = await ctx.dict(`ppocr-dict-${reader.key}`);
-            const run = ctx.runner(`ppocr-rec-${reader.key}`, 'text-rec');
-            if (ctx.cancelled()) return;
-            const texts = reader.key === 'latin' ? found : largestOnes;
-            const rs = await d.readTexts(
-              ctx.source,
-              texts.map((f) => f.box),
-              run,
-              dict,
-            );
-            texts.forEach((f, i) => {
-              const r = rs[i];
-              if (r) reads.set(f.id, (reads.get(f.id) ?? new Map()).set(reader.key, r));
-            });
-          } catch (e) {
-            if (reader.key === 'latin') throw e;
+        const dict = ctx.dict;
+        const readAll = async (boxes: VisualFinding[], mirror: boolean) => {
+          const largestOnes = largest(boxes.map((f) => ({ ...f.box, f }))).map(({ f }) => f);
+          const reads = new Map<string, Map<string, Reading>>();
+          for (const [i, reader] of READERS.entries()) {
+            ctx.onStage?.('text-rec', { done: i, total: READERS.length });
+            try {
+              const words = await dict(`ppocr-dict-${reader.key}`);
+              const run = ctx.runner(`ppocr-rec-${reader.key}`, 'text-rec');
+              if (ctx.cancelled()) return null;
+              const texts = reader.key === 'latin' ? boxes : largestOnes;
+              const rs = await d.readTexts(
+                ctx.source,
+                texts.map((f) => {
+                  const tilt = state.tilts.get(f.id);
+                  return tilt ? { ...f.box, tilt } : f.box;
+                }),
+                run,
+                words,
+                mirror,
+              );
+              texts.forEach((f, i) => {
+                const r = rs[i];
+                if (r) reads.set(f.id, (reads.get(f.id) ?? new Map()).set(reader.key, r));
+              });
+            } catch (e) {
+              if (reader.key === 'latin') throw e;
+            }
           }
-        }
+          return new Map(boxes.map((f) => [f.id, bestReading(reads.get(f.id) ?? new Map())]));
+        };
+        const straight = await readAll(found, false);
+        if (!straight) return;
+        const unread = found.filter((f) => !isRead(straight.get(f.id) ?? null));
+        const mirrored = unread.length ? await readAll(unread, true) : new Map<string, Reading | null>();
+        if (!mirrored) return;
         state.pendingText = [];
         for (const f of found) {
-          const r = bestReading(reads.get(f.id) ?? new Map());
+          const r = isRead(straight.get(f.id) ?? null) ? straight.get(f.id)! : (mirrored.get(f.id) ?? null);
           if (isRead(r)) ctx.emit({ ...f, text: r.text });
         }
       },
@@ -161,7 +182,7 @@ export async function runScan(
   stages: ScanStage[] = createStages(),
 ): Promise<Record<string, number>> {
   const ms: Record<string, number> = {};
-  const state: ScanState = { findings: new Map(), vehicles: [], pendingText: [] };
+  const state: ScanState = { findings: new Map(), vehicles: [], pendingText: [], tilts: new Map() };
   const tracked: ScanContext = {
     ...ctx,
     emit: (f) => {
@@ -172,6 +193,7 @@ export async function runScan(
   for (const stage of stages) {
     if (ctx.cancelled()) break;
     if (!ctx.categories.includes(stage.category)) continue;
+    ctx.onStage?.(stage.name);
     const t0 = performance.now();
     await stage.run(tracked, state);
     ms[stage.name] = Math.round(performance.now() - t0);

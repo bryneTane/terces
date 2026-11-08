@@ -42,6 +42,18 @@ function bitmapSource(bitmap: ImageBitmap): ImageSource {
       const d = ctx.getImageData(0, 0, dw, dh);
       return { data: d.data, width: dw, height: dh };
     },
+    rotated(t, dw, dh) {
+      canvas.width = dw;
+      canvas.height = dh;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.setTransform(dw / t.len, 0, 0, dh / t.thick, dw / 2, dh / 2);
+      ctx.rotate(-t.angle);
+      ctx.translate(-t.cx, -t.cy);
+      ctx.drawImage(bitmap, 0, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const d = ctx.getImageData(0, 0, dw, dh);
+      return { data: d.data, width: dw, height: dh };
+    },
   };
 }
 
@@ -92,6 +104,7 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
           categories,
           emit: (finding) => post({ type: 'finding', sessionId, finding }),
           cancelled: () => cancelled.has(sessionId),
+          onStage: (stage, part) => post({ type: 'step', sessionId, stage, ...(part ? { part } : {}) }),
         });
         post({ type: 'done', sessionId, ms });
       } catch (e) {

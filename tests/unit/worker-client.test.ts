@@ -116,12 +116,14 @@ describe('scan stages (full order)', () => {
       ]),
     });
     const runner = vi.fn(() => vi.fn());
+    const steps: string[] = [];
     const ms = await runScan(
       {
         source: { width: 400, height: 400, pixels: vi.fn() },
         runner,
         dict: async () => ['A'],
         categories: ['face', 'text', 'person'],
+        onStage: (stage, part) => steps.push(part ? `${stage} ${part.done}/${part.total}` : stage),
         emit: (f) =>
           emitted.push({
             id: f.id,
@@ -146,6 +148,15 @@ describe('scan stages (full order)', () => {
       'ppocr-det',
       ...READERS.map((r) => `ppocr-rec-${r.key}`),
       'yolox-nano',
+    ]);
+    // Every stage is announced as it starts; text reading also as it moves to each alphabet.
+    expect(steps).toEqual([
+      'face',
+      'text-det',
+      'text-rec',
+      ...READERS.map((_, i) => `text-rec ${i}/${READERS.length}`),
+      'person',
+      'plate',
     ]);
   });
 });
@@ -263,6 +274,43 @@ describe('text reading in every alphabet', () => {
       }).filter((s) => s.name === 'text-det' || s.name === 'text-rec'),
     );
     expect(found.sort()).toEqual(['text-2:7', 'text-3:OPEN']);
+  });
+
+  it('reads unreadable boxes again mirrored, and marks mirrored text', async () => {
+    const boxes = [
+      { x: 0, y: 0, w: 12, h: 3, score: 0.9 }, // plain text
+      { x: 20, y: 0, w: 12, h: 3, score: 0.9 }, // text in a mirror
+      { x: 40, y: 0, w: 3, h: 3, score: 0.9 }, // a flower, either way
+    ];
+    const mirroredCalls: number[][] = [];
+    const found: string[] = [];
+    await runScan(
+      {
+        source: { width: 100, height: 100, pixels: vi.fn() },
+        runner: (model) => Object.assign(vi.fn(), { model }),
+        dict: async () => [],
+        categories: ['text'],
+        emit: (f) => void found.push(`${f.id}:${f.text}`),
+        cancelled: () => false,
+      },
+      createStages({
+        detectText: vi.fn(async () => boxes),
+        readTexts: vi.fn(async (_s, bs, _run, _d, mirror) => {
+          if (mirror) mirroredCalls.push(bs.map((b: { x: number }) => b.x));
+          return bs.map((b: { x: number }) =>
+            b.x === 0 && !mirror
+              ? { text: 'OPEN', score: 0.95 }
+              : b.x === 20 && mirror
+                ? { text: 'GOLD GYM', score: 0.95 }
+                : { text: 'C COY', score: 0.44 },
+          );
+        }),
+      }).filter((s) => s.name === 'text-det' || s.name === 'text-rec'),
+    );
+    expect(found.sort()).toEqual(['text-0:OPEN', 'text-1:GOLD GYM']);
+    // Only the boxes nothing could read are read mirrored.
+    expect(mirroredCalls.every((xs) => !xs.includes(0))).toBe(true);
+    expect(mirroredCalls.length).toBe(READERS.length);
   });
 
   it('has the Latin reader read every box, beyond the limit of the other readers', async () => {

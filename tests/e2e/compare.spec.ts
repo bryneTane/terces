@@ -20,3 +20,10 @@ test('the before/after line goes where the photo is pressed', async ({ page }) =
     expect(Math.abs(l.x + l.width / 2 - (p.x + share * p.width))).toBeLessThan(4);
   }
 });
+
+test('on a phone the save button is on screen without scrolling', async ({ page }) => {
+  await cloakFixture(page, 'rotated.jpg');
+  await settled(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await expect(page.getByTestId('save-actions').getByRole('button', { name: 'Download' })).toBeInViewport();
+});

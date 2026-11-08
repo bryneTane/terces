@@ -69,10 +69,34 @@ describe('Scan', () => {
       ),
     );
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+    expect(screen.getByRole('status')).toHaveTextContent('Getting the scanner ready, once. 42%');
     expect(screen.getByTestId('intel-count')).toHaveTextContent('This photo gives away 1 thing.');
     expect(screen.getAllByTestId('reticle')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Skip to review' }));
     expect(skip).toHaveBeenCalled();
+  });
+
+  it('says which step runs and how far the scan has got', () => {
+    const p = pipeline(
+      { id: 's1', state: 'scanning' },
+      { scanner: { ready: true, progress: 1, error: null, step: { id: 's1', stage: 'text-rec', part: { done: 4, total: 10 } } } },
+    );
+    show(p);
+    expect(screen.getByRole('status')).toHaveTextContent('Reading the text, alphabet 5 of 10...');
+    // Steps: open, faces, find text, read text (4/10 done), people, plates.
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', String(Math.round((3.4 / 6) * 100)));
+    const chips = screen.getAllByRole('listitem').filter((li) => li.hasAttribute('data-state'));
+    expect(chips.map((c) => c.dataset.state)).toEqual(['done', 'done', 'active', 'waiting', 'waiting']);
+  });
+
+  it('ignores the step of an earlier photo', () => {
+    show(
+      pipeline(
+        { id: 's2', state: 'scanning' },
+        { scanner: { ready: true, progress: 1, error: null, step: { id: 's1', stage: 'person' } } },
+      ),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Opening the photo and its hidden data...');
   });
 
   it('keeps the report on screen when done, until the user moves on', () => {
@@ -82,6 +106,7 @@ describe('Scan', () => {
       screen.getByRole('heading', { name: 'Here is what anyone who gets this photo can learn.' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Skip to review' })).toBeNull();
+    expect(screen.queryByTestId('scan-progress')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cloak this photo' }));
     expect(proceed).toHaveBeenCalled();
   });

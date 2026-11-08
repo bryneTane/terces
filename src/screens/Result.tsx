@@ -74,14 +74,21 @@ export function Result({
   ].filter((r) => r.always || r.n > 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1320px] px-4 pt-6 pb-16 sm:px-8 sm:pt-8">
+    <div
+      className={`mx-auto w-full max-w-[1320px] px-4 pt-6 pb-16 sm:px-8 sm:pt-8 ${result.verified ? 'max-lg:pb-32' : ''}`}
+    >
       <div className="flex flex-wrap items-start gap-8">
         <section aria-label={t('result.compare')} className="min-w-0 flex-[1_1_600px]">
           <div className="rulers">
             <div data-compare className="relative border border-edge bg-deep">
               {/* The cloaked image is revealed by a cold sweep, once; instant on the static tier. */}
               <div className={tier === 'static' ? '' : 'decloak relative'} data-testid="result-image">
-                <PhotoView src={result.url} alt={t('result.after')}>
+                <PhotoView
+                  src={result.url}
+                  alt={t('result.after')}
+                  // Shorter on phones, so the summary shows below and the page reads as scrollable.
+                  height="max-h-[46svh] lg:max-h-[74vh]"
+                >
                   {before && (
                     <>
                       <img
@@ -210,7 +217,12 @@ export function Result({
                     </span>
                   </span>
                 </div>
-                <div className={`mt-4 grid gap-3 ${canShare ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                {/* On phones the save buttons are pinned to the bottom of the screen: the photo
+                    fills most of it, and the buttons must not depend on finding the scroll. */}
+                <div
+                  data-testid="save-actions"
+                  className={`mt-4 grid gap-3 ${canShare ? 'grid-cols-2' : 'grid-cols-1'} max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:m-0 max-lg:border-t max-lg:border-line max-lg:bg-void/95 max-lg:px-4 max-lg:pt-3 max-lg:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-lg:backdrop-blur-md`}
+                >
                   <button
                     type="button"
                     onClick={() => save('file')}

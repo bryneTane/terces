@@ -8,6 +8,7 @@ import { Landing } from './screens/Landing.tsx';
 import { Result } from './screens/Result.tsx';
 import { Review } from './screens/Review.tsx';
 import { Scan } from './screens/Scan.tsx';
+import { useBackGuard } from './lib/backGuard.ts';
 import type { Pipeline } from './state/usePipeline.ts';
 
 const onHash = (cb: () => void) => {
@@ -28,6 +29,7 @@ export function AppView({ pipeline }: { pipeline: Pipeline }) {
   const { session, scanner } = pipeline;
   // The About page is a hash route so it works offline and never leaves the page (the photo stays in memory).
   const hash = useSyncExternalStore(onHash, readHash, () => '');
+  useBackGuard(session.state !== 'idle');
   let screen;
   if (hash === '#about') screen = <About onBack={() => (location.hash = '')} />;
   else

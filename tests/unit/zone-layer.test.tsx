@@ -72,8 +72,8 @@ describe('ZoneLayer editing', () => {
     expect(props.onToggle).not.toHaveBeenCalled();
   });
 
-  it('a drag draws a rectangle in image pixels', () => {
-    const { props, layer } = mount();
+  it('with the draw tool, a drag draws a rectangle in image pixels', () => {
+    const { props, layer } = mount({ tool: 'draw' });
     pointer(layer, 'pointerDown', 120, 20);
     pointer(layer, 'pointerMove', 160, 60);
     expect(screen.getByTestId('zone-draft')).toBeInTheDocument();
@@ -115,16 +115,22 @@ describe('ZoneLayer editing', () => {
     expect(onResize).toHaveBeenCalledWith('m1', { x: 70, y: 80, w: 30, h: 20 });
   });
 
-  it('a tap on a drawn zone still toggles it, and drags on detected zones still draw', () => {
+  it('in select, a tap on a drawn zone toggles it and a drag never draws', () => {
     const onResize = vi.fn();
     const { props, layer } = mount({ onResize });
     pointer(layer, 'pointerDown', 130, 120);
     pointer(layer, 'pointerUp', 131, 121);
     expect(props.onToggle).toHaveBeenCalledWith('m1');
-    pointer(layer, 'pointerDown', 30, 30);
-    pointer(layer, 'pointerMove', 50, 50);
-    pointer(layer, 'pointerUp', 50, 50);
-    expect(props.onAdd).toHaveBeenCalledWith({ x: 15, y: 15, w: 10, h: 10 });
+    for (const [x, y] of [
+      [30, 30], // on a detected zone
+      [120, 20], // on nothing
+    ] as const) {
+      pointer(layer, 'pointerDown', x, y);
+      pointer(layer, 'pointerMove', x + 40, y + 40);
+      expect(screen.queryByTestId('zone-draft')).toBeNull();
+      pointer(layer, 'pointerUp', x + 40, y + 40);
+    }
+    expect(props.onAdd).not.toHaveBeenCalled();
     expect(onResize).not.toHaveBeenCalled();
   });
 

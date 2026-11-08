@@ -66,7 +66,8 @@ export function Review({
   const { t } = useI18n();
   const [styles, setStyles] = useState<MaskStyles>({});
   const styleOf = (c: Cat) => styles[c] ?? DEFAULT_STYLE;
-  const [tool, setTool] = useState<Tool>('select');
+  // With nothing to select, start ready to draw (select never draws).
+  const [tool, setTool] = useState<Tool>(() => (session.zones.length ? 'select' : 'draw'));
   const [open, setOpen] = useState<Partial<Record<Cat, boolean>>>({});
   const [hover, setHover] = useState<string | null>(null);
   const history = useRef<Zone[][]>([]);
