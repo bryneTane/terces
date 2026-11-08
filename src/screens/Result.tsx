@@ -112,21 +112,21 @@ export function Result({
                       >
                         {t('result.after')}
                       </span>
+                      {/* Over the photo itself (not the frame around it), so where you press is where the line goes. */}
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={pos}
+                        onChange={(e) => setPos(Number(e.target.value))}
+                        aria-label={t('result.compare')}
+                        className="compare-range pointer-events-auto absolute inset-0 size-full cursor-ew-resize opacity-0"
+                      />
                     </>
                   )}
                 </PhotoView>
               </div>
-              {before && (
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={pos}
-                  onChange={(e) => setPos(Number(e.target.value))}
-                  aria-label={t('result.compare')}
-                  className="absolute inset-0 size-full cursor-ew-resize opacity-0"
-                />
-              )}
             </div>
           </div>
           <div className="mt-3 flex flex-wrap justify-between gap-x-6 gap-y-2 font-mono text-[11px] tracking-[0.1em] text-dim uppercase">

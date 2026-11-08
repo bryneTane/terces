@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { chooseReading, isEvidence, READERS, rtlOrder, toNative } from '../../src/worker/models/readers.ts';
+import {
+  bestReading,
+  chooseReading,
+  isEvidence,
+  isRead,
+  READERS,
+  rtlOrder,
+  toNative,
+} from '../../src/worker/models/readers.ts';
 
 const reader = (key: string) => READERS.find((r) => r.key === key)!;
 const reads = (o: Record<string, [string, number]>) =>
@@ -55,5 +63,45 @@ describe('cleaning a chosen reading', () => {
     expect(toNative(reader('cyrillic'), 'Москва HOTEL')).toBe('Москва HOTEL');
     expect(toNative(reader('el'), 'Οδός EPMOY')).toBe('Οδός EPMOY');
     expect(toNative(reader('zh'), 'ABC')).toBe('ABC');
+  });
+});
+
+describe('readings most readers agree on', () => {
+  it('reads a lone digit the Latin reader is unsure of when the other readers agree', () => {
+    const r = bestReading(
+      reads({
+        latin: ['O', 0.47],
+        zh: ['0', 0.95],
+        korean: ['0', 0.98],
+        arabic: ['0', 0.99],
+        el: ['0', 0.99],
+        th: ['0', 0.74],
+      }),
+    );
+    expect(r?.text).toBe('0');
+    expect(r?.score).toBeGreaterThan(0.9);
+  });
+
+  it('does not count two confident readers among many as agreement', () => {
+    expect(
+      chooseReading(
+        reads({
+          latin: ['0', 0.43],
+          devanagari: ['0', 0.94],
+          el: ['0', 0.8],
+          zh: ['0', 0.3],
+          ta: ['O', 0.53],
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('which text boxes are marked', () => {
+  it('marks what was read, a single character only when read with confidence', () => {
+    expect(isRead({ text: 'OPEN', score: 0.6 })).toBe(true);
+    expect(isRead({ text: '7', score: 0.95 })).toBe(true);
+    expect(isRead({ text: 'T', score: 0.51 })).toBe(false);
+    expect(isRead(null)).toBe(false);
   });
 });

@@ -127,15 +127,30 @@ export function recWidth(w: number, h: number): number {
   return Math.min(REC_MAX_WIDTH, Math.max(8, Math.ceil((REC_HEIGHT * w) / Math.max(1, h) / 8) * 8));
 }
 
-/** Crop a box to a 1x3x48xW tensor, BGR, (v/255 - 0.5)/0.5. Tall boxes are rotated to horizontal. */
-export function recInput(src: ImageSource, box: Rect): TensorLike {
-  const rotate = box.h > 1.5 * box.w;
+/** Tall boxes hold vertical text, read after turning it horizontal. */
+export const isVertical = (box: Rect) => box.h > 1.5 * box.w;
+
+/**
+ * Crop a box to a 1x3x48xW tensor, BGR, (v/255 - 0.5)/0.5. Vertical boxes are rotated to
+ * horizontal: counter-clockwise (text that runs bottom to top), or clockwise when `clockwise`.
+ */
+export function recInput(src: ImageSource, box: Rect, clockwise = false): TensorLike {
+  const rotate = isVertical(box);
   const [bw, bh] = rotate ? [box.h, box.w] : [box.w, box.h];
   const W = recWidth(bw, bh);
-  const px = rotate
+  let px = rotate
     ? rotate90(src.pixels(box.x, box.y, box.w, box.h, REC_HEIGHT, W))
     : src.pixels(box.x, box.y, box.w, box.h, W, REC_HEIGHT);
+  if (rotate && clockwise) px = rotate180(px);
   return { data: toCHW(px, 'bgr', (v) => (v / 255 - 0.5) / 0.5), dims: [1, 3, REC_HEIGHT, W] };
+}
+
+/** Rotate RGBA pixels by 180 degrees. */
+export function rotate180(px: Pixels): Pixels {
+  const n = px.width * px.height;
+  const out = new Uint8ClampedArray(px.data.length);
+  for (let i = 0; i < n; i++) out.set(px.data.subarray(i * 4, i * 4 + 4), (n - 1 - i) * 4);
+  return { data: out, width: px.width, height: px.height };
 }
 
 /** Rotate RGBA pixels 90 degrees counter-clockwise (vertical text read bottom to top, as PaddleOCR does). */
@@ -207,10 +222,17 @@ export async function recognizeText(
   dict: readonly string[],
 ): Promise<{ text: string; score: number } | null> {
   if (box.w < 2 || box.h < 2) return null;
-  const out = await run({ x: recInput(src, box) });
-  const t = Object.values(out)[0]!;
-  const [, steps = 0, classes = 0] = t.dims;
-  return ctcDecode(t.data as Float32Array, steps, classes, dict);
+  const read = async (clockwise: boolean) => {
+    const out = await run({ x: recInput(src, box, clockwise) });
+    const t = Object.values(out)[0]!;
+    const [, steps = 0, classes = 0] = t.dims;
+    return ctcDecode(t.data as Float32Array, steps, classes, dict);
+  };
+  const a = await read(false);
+  if (!isVertical(box)) return a;
+  // Vertical text runs either way (labels top to bottom, spines bottom to top): keep the surer reading.
+  const b = await read(true);
+  return b.score > a.score ? b : a;
 }
 
 /**

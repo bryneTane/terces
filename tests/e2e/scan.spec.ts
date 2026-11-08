@@ -69,7 +69,7 @@ test('in French', async ({ page }) => {
   await page.getByRole('button', { name: 'fr' }).click();
   await page.getByTestId('file-input').setInputFiles('tests/fixtures/street-gps.jpg');
   await expect(page.getByRole('button', { name: 'Masquer cette photo' })).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByTestId('intel-count')).toContainText('Cette photo trahit');
+  await expect(page.getByTestId('intel-count')).toContainText('Cette photo révèle');
   await expect(page.getByTestId('intel-file')).toContainText('(près de Lyon, FR)');
   await countMatchesRows(page);
 });

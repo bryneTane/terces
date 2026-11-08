@@ -9,6 +9,7 @@ import {
   readTexts,
   recognizeText,
   rotate90,
+  rotate180,
 } from '../../src/worker/models/ppocr.ts';
 import { iou } from '../../src/worker/models/common.ts';
 import { imageSource, runner } from './model-helpers.ts';
@@ -73,6 +74,38 @@ describe('recognition helpers', () => {
   it('keeps the largest boxes', () => {
     const b = (s: number) => ({ x: 0, y: 0, w: s, h: s, score: 1 });
     expect(largest([b(1), b(5), b(3)], 2).map((x) => x.w)).toEqual([5, 3]);
+  });
+});
+
+describe('vertical text', () => {
+  it('rotates pixels 180 degrees', () => {
+    const px = { data: Uint8ClampedArray.from([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]), width: 3, height: 1 };
+    expect([...rotate180(px).data]).toEqual([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
+  });
+
+  it('reads a tall box both ways and keeps the surer reading', async () => {
+    const src = {
+      width: 20,
+      height: 100,
+      pixels: (_x: number, _y: number, _w: number, _h: number, dw: number, dh: number) => ({
+        data: new Uint8ClampedArray(dw * dh * 4),
+        width: dw,
+        height: dh,
+      }),
+    };
+    const { p, steps, classes } = logits([cls('A')]);
+    let calls = 0;
+    const run = async () => {
+      calls++;
+      const q = calls === 2 ? p : new Float32Array(p.length).fill(0.001);
+      return { y: { data: q, dims: [1, steps, classes] } };
+    };
+    const r = await recognizeText(src, { x: 0, y: 0, w: 20, h: 100 }, run, dict);
+    expect(calls).toBe(2);
+    expect(r?.text).toBe('A');
+    calls = 0;
+    await recognizeText(src, { x: 0, y: 0, w: 100, h: 20 }, run, dict);
+    expect(calls).toBe(1);
   });
 });
 

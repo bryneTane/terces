@@ -22,7 +22,10 @@ export interface ZoneLayerProps {
   onToggle?: (id: string) => void;
   onAdd?: (rect: Rect) => void;
   onRemove?: (id: string) => void;
-  /** Drag a corner handle of the hovered zone to resize it. Called once, on release. */
+  /**
+   * Drag a corner handle of the hovered zone to resize it, or drag a drawn zone to move it.
+   * Called once, on release.
+   */
   onResize?: (id: string, rect: Rect) => void;
   /** `draw`: taps do nothing, only drags (draw a zone). Default `select`: taps toggle, drags draw. */
   tool?: Tool;
@@ -35,7 +38,8 @@ export interface ZoneLayerProps {
 
 /**
  * Zones over the photo. Display-only without handlers. With handlers: a tap toggles the smallest
- * zone under it, a drag draws a manual zone, manual zones have a remove control. Zones are also
+ * zone under it, a drag on a drawn zone moves it, a drag elsewhere draws a manual zone, manual
+ * zones have a remove control. Zones are also
  * focusable buttons so the keyboard can toggle them.
  */
 export function ZoneLayer({
@@ -53,7 +57,15 @@ export function ZoneLayer({
 }: ZoneLayerProps) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
-  const start = useRef<{ id: number; sx: number; sy: number; x: number; y: number } | null>(null);
+  const start = useRef<{
+    id: number;
+    sx: number;
+    sy: number;
+    x: number;
+    y: number;
+    /** Drawn zone the drag started on: the drag moves it. */
+    move?: Zone;
+  } | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
   /** Corner drag in progress: the opposite corner stays fixed. */
   const sizing = useRef<{ id: number; zone: string; fx: number; fy: number } | null>(null);
@@ -71,10 +83,12 @@ export function ZoneLayer({
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const p = toImage(e);
-    start.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ...p };
+    const hit = tool === 'select' ? hitTest(zones, p.x, p.y) : null;
+    const move = hit?.kind === 'manual' && onResize ? hit : undefined;
+    start.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ...p, ...(move ? { move } : {}) };
     root.current?.setPointerCapture?.(e.pointerId);
     // Touch has no hover: the touched zone shows its resize handles.
-    if (e.pointerType !== 'mouse' && tool === 'select') onHover?.(hitTest(zones, p.x, p.y)?.id ?? null);
+    if (e.pointerType !== 'mouse' && tool === 'select') onHover?.(hit?.id ?? null);
   };
   const startResize = (e: PointerEvent<HTMLSpanElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -114,8 +128,18 @@ export function ZoneLayer({
       }
       return;
     }
+    const far = Math.hypot(e.clientX - s.sx, e.clientY - s.sy) >= DRAG_THRESHOLD;
+    if (s.move) {
+      if (!far && live?.id !== s.move.id) return;
+      const p = toImage(e);
+      const r = s.move.rect;
+      const x = Math.max(0, Math.min(width - r.w, r.x + p.x - s.x));
+      const y = Math.max(0, Math.min(height - r.h, r.y + p.y - s.y));
+      setLive({ id: s.move.id, rect: { ...r, x, y } });
+      return;
+    }
     if (!onAdd) return;
-    if (!draft && Math.hypot(e.clientX - s.sx, e.clientY - s.sy) < DRAG_THRESHOLD) return;
+    if (!draft && !far) return;
     const p = toImage(e);
     setDraft({
       x: Math.min(s.x, p.x),
@@ -135,6 +159,11 @@ export function ZoneLayer({
     const s = start.current;
     start.current = null;
     if (!s || s.id !== e.pointerId) return;
+    if (s.move && live?.id === s.move.id) {
+      onResize?.(live.id, live.rect);
+      setLive(null);
+      return;
+    }
     if (draft) {
       onAdd?.(draft);
       setDraft(null);
@@ -150,7 +179,8 @@ export function ZoneLayer({
     setLive(null);
     setDraft(null);
   };
-  const hovered = zones.find((z) => z.id === hover);
+  const found = zones.find((z) => z.id === hover);
+  const hovered = found && live?.id === found.id ? { ...found, rect: live.rect } : found;
   const name = (z: Zone) => nameOf?.(z) ?? t(`cat.${z.category}`);
 
   return (
@@ -181,7 +211,7 @@ export function ZoneLayer({
             data-category={z.category}
             data-selected={z.selected}
             style={{ ...pct(rect, width, height), boxShadow: glow }}
-            className={`absolute transition-shadow ${z.category === 'face' ? 'rounded-[50%]' : ''} ${z.selected ? 'hatch border-2 border-alert' : `border border-dashed border-accent/70 ${lit ? 'bg-accent/10' : ''}`}`}
+            className={`absolute transition-shadow ${onResize && tool === 'select' && z.kind === 'manual' ? 'cursor-move' : ''} ${z.category === 'face' ? 'rounded-[50%]' : ''} ${z.selected ? 'hatch border-2 border-alert' : `border border-dashed border-accent/70 ${lit ? 'bg-accent/10' : ''}`}`}
           >
             {interactive ? (
               <button
@@ -203,7 +233,9 @@ export function ZoneLayer({
                   data-testid="zone-handle"
                   aria-hidden="true"
                   onPointerDown={startResize}
-                  className={`pointer-events-auto absolute z-10 grid size-6 place-items-center ${c[0] === 'n' ? '-top-3' : '-bottom-3'} ${c[1] === 'w' ? '-left-3' : '-right-3'} ${c === 'nw' || c === 'se' ? 'cursor-nwse-resize' : 'cursor-nesw-resize'}`}
+                  // Big enough for a finger; with a mouse just the visible square, so the inside
+                  // of a small zone stays a move/select area.
+                  className={`pointer-events-auto absolute z-10 grid size-6 place-items-center pointer-fine:size-3 ${c[0] === 'n' ? '-top-3 pointer-fine:-top-1.5' : '-bottom-3 pointer-fine:-bottom-1.5'} ${c[1] === 'w' ? '-left-3 pointer-fine:-left-1.5' : '-right-3 pointer-fine:-right-1.5'} ${c === 'nw' || c === 'se' ? 'cursor-nwse-resize' : 'cursor-nesw-resize'}`}
                 >
                   <span
                     className={`pointer-events-none size-2.5 border-2 bg-void ${z.selected ? 'border-alert' : 'border-accent'}`}

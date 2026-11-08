@@ -103,10 +103,24 @@ export function rtlOrder(text: string): string {
 }
 
 /**
- * The text of one box from every reader's reading of it (keyed by reader key; readers that could
- * not run are simply absent). Returns null when nothing was read.
+ * Text that most readers read the same way, each with confidence: every reader knows digits and
+ * basic Latin, so agreement catches what the Latin reader alone is unsure of (a lone "0").
  */
-export function chooseReading(readings: ReadonlyMap<string, Reading>): string | null {
+function agreed(readings: ReadonlyMap<string, Reading>): Reading | null {
+  const votes = new Map<string, number[]>();
+  for (const r of readings.values())
+    if (r.text && r.score >= NATIVE_MIN_SCORE) votes.set(r.text, [...(votes.get(r.text) ?? []), r.score]);
+  for (const [text, scores] of votes)
+    if (scores.length * 2 > readings.size)
+      return { text, score: scores.reduce((a, b) => a + b, 0) / scores.length };
+  return null;
+}
+
+/**
+ * The reading of one box from every reader's reading of it (keyed by reader key; readers that
+ * could not run are simply absent), with its confidence. Null when nothing was read.
+ */
+export function bestReading(readings: ReadonlyMap<string, Reading>): Reading | null {
   let best: { reader: Reader; r: Reading } | null = null;
   for (const reader of READERS) {
     const r = readings.get(reader.key);
@@ -114,8 +128,25 @@ export function chooseReading(readings: ReadonlyMap<string, Reading>): string | 
   }
   if (best) {
     const text = toNative(best.reader, best.r.text);
-    return best.reader.rtl ? rtlOrder(text) : text;
+    return { text: best.reader.rtl ? rtlOrder(text) : text, score: best.r.score };
   }
   const latin = readings.get('latin');
-  return latin && latin.text && latin.score >= LATIN_MIN_SCORE ? latin.text : null;
+  const sure = latin && latin.text && latin.score >= LATIN_MIN_SCORE ? latin : null;
+  const all = agreed(readings);
+  return all && (!sure || all.score > sure.score) ? all : sure;
 }
+
+/** The text of one box (see `bestReading`). */
+export const chooseReading = (readings: ReadonlyMap<string, Reading>): string | null =>
+  bestReading(readings)?.text ?? null;
+
+/** Confidence a single character needs to count as read (see `isRead`). */
+export const ONE_CHAR_MIN_SCORE = 0.9;
+
+/**
+ * Whether a box was read, so it is marked as text. The detector also fires on flowers, leaves
+ * and faces; only what a reader can read is marked, and people draw zones over anything else.
+ * A single character counts only when read with confidence.
+ */
+export const isRead = (reading: Reading | null): reading is Reading =>
+  !!reading && ([...reading.text.replace(/\s/g, '')].length > 1 || reading.score >= ONE_CHAR_MIN_SCORE);

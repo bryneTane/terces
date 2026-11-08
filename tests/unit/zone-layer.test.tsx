@@ -96,6 +96,45 @@ describe('ZoneLayer editing', () => {
     expect(props.onAdd).not.toHaveBeenCalled();
   });
 
+  it('dragging a drawn zone moves it, kept inside the photo, once, on release', () => {
+    const onResize = vi.fn();
+    const { props, layer } = mount({ onResize });
+    // m1 is at 50,50 (image px) = 100,100 screen px; drag it 20 image px right and 10 up.
+    pointer(layer, 'pointerDown', 130, 120);
+    pointer(layer, 'pointerMove', 170, 100);
+    expect(onResize).not.toHaveBeenCalled();
+    pointer(layer, 'pointerUp', 170, 100);
+    expect(onResize).toHaveBeenCalledWith('m1', { x: 70, y: 40, w: 30, h: 20 });
+    expect(props.onAdd).not.toHaveBeenCalled();
+    expect(props.onToggle).not.toHaveBeenCalled();
+
+    onResize.mockClear();
+    pointer(layer, 'pointerDown', 130, 120);
+    pointer(layer, 'pointerMove', 400, 400);
+    pointer(layer, 'pointerUp', 400, 400);
+    expect(onResize).toHaveBeenCalledWith('m1', { x: 70, y: 80, w: 30, h: 20 });
+  });
+
+  it('a tap on a drawn zone still toggles it, and drags on detected zones still draw', () => {
+    const onResize = vi.fn();
+    const { props, layer } = mount({ onResize });
+    pointer(layer, 'pointerDown', 130, 120);
+    pointer(layer, 'pointerUp', 131, 121);
+    expect(props.onToggle).toHaveBeenCalledWith('m1');
+    pointer(layer, 'pointerDown', 30, 30);
+    pointer(layer, 'pointerMove', 50, 50);
+    pointer(layer, 'pointerUp', 50, 50);
+    expect(props.onAdd).toHaveBeenCalledWith({ x: 15, y: 15, w: 10, h: 10 });
+    expect(onResize).not.toHaveBeenCalled();
+  });
+
+  it('shows the move cursor on drawn zones only', () => {
+    mount({ onResize: vi.fn() });
+    const [face, m1] = screen.getAllByTestId('zone');
+    expect(face!.className).not.toContain('cursor-move');
+    expect(m1!.className).toContain('cursor-move');
+  });
+
   it('shows no handles without a hovered zone', () => {
     mount({ onResize: vi.fn() });
     expect(screen.queryAllByTestId('zone-handle')).toHaveLength(0);

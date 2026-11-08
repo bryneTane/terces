@@ -57,3 +57,26 @@ test('deselect a face, draw a zone, cloak: the face stays, the drawn area is mas
   await page.getByTestId('zone-remove').click();
   await expect(page.locator('[data-testid="zone"][data-category="manual"]')).toHaveCount(0);
 });
+
+test('a drawn zone can be dragged to another place', async ({ page }) => {
+  test.setTimeout(240_000);
+  const { at } = await toReview(page);
+  const drag = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 });
+    await page.mouse.move(to.x, to.y, { steps: 4 });
+    await page.mouse.up();
+  };
+  await drag(at(1350, 1000), at(1550, 1200));
+  const drawn = page.locator('[data-testid="zone"][data-category="manual"]');
+  await expect(drawn).toHaveCount(1);
+  const before = (await drawn.boundingBox())!;
+  // Grab its middle and move it 300 image px left: still one zone, same size, moved.
+  await drag(at(1450, 1100), at(1150, 1100));
+  await expect(drawn).toHaveCount(1);
+  const after = (await drawn.boundingBox())!;
+  expect(after.x).toBeLessThan(before.x - 20);
+  expect(Math.abs(after.width - before.width)).toBeLessThan(2);
+  expect(Math.abs(after.y - before.y)).toBeLessThan(2);
+});

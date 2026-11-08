@@ -220,6 +220,16 @@ export function Review({
           <p className="mt-3 mb-0 text-sm text-dim" data-testid="review-hint">
             {detected ? t('review.hint') : t('review.nothing')}
           </p>
+          {/* No detector finds what ties a person to a place: crests, badges, uniforms. Say so. */}
+          <p
+            className="mt-3 mb-0 flex items-start gap-3 border border-edge px-4 py-3 text-sm text-ink"
+            data-testid="review-check"
+          >
+            <span className="mt-0.5 shrink-0 text-accent">
+              <Icon name="edit" size={16} />
+            </span>
+            {t('review.checkMarks')}
+          </p>
         </section>
 
         <aside aria-label={t('review.listHead')} className="grid min-w-0 flex-[1_1_380px] gap-4">
@@ -321,9 +331,12 @@ export function Review({
                 </div>
               );
             })}
-            <p className="m-0 flex items-center gap-3 border-t border-line px-5 py-3.5 text-[13px] text-dim">
-              <span className="text-safe">
-                <Icon name="lock" size={16} />
+            <p
+              data-testid="metadata-note"
+              className={`m-4 flex items-center gap-3 border px-4 py-3 text-sm ${m ? 'border-safe/60 bg-safe/10 font-medium text-ink' : 'border-line text-dim'}`}
+            >
+              <span className="shrink-0 text-safe">
+                <Icon name={m ? 'shieldCheck' : 'lock'} size={20} />
               </span>
               {m ? t('review.metaAlways', { count: m }) : t('review.metadataNone')}
             </p>

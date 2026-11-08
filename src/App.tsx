@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { GlitchTransition } from './components/GlitchTransition.tsx';
 import { Reticle } from './components/Reticle.tsx';
 import { FlowHeader, SiteHeader } from './components/SiteHeader.tsx';
@@ -59,6 +59,12 @@ export function AppView({ pipeline }: { pipeline: Pipeline }) {
         screen = <ErrorScreen error={session.error} onRetry={pipeline.reset} />;
     }
   const key = screenKey(hash, session.state);
+  // Section links (#privacy...) from the About page land on a page that was not there when the
+  // browser looked for the anchor: scroll once it is rendered. The About page opens at its top.
+  useEffect(() => {
+    if (key === 'about') scrollTo(0, 0);
+    else if (hash.length > 1) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [key, hash]);
   const step = key === 'scan' ? 1 : key === 'review' ? 2 : key === 'result' ? 3 : 0;
   const home = () => {
     pipeline.reset();

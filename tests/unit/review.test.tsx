@@ -31,6 +31,13 @@ describe('Review', () => {
     expect(screen.getByRole('button', { name: 'Cloak · 0 zones' })).toBeEnabled();
   });
 
+  it('says logos, crests, badges and uniforms are left to the person', () => {
+    show(session());
+    expect(screen.getByTestId('review-check')).toHaveTextContent(
+      'Logos, crests, badges and uniforms are not detected.',
+    );
+  });
+
   it('cloaks with the chosen mask style', () => {
     const onCloak = vi.fn();
     show(

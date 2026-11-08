@@ -54,7 +54,7 @@ describe('share card', () => {
     expect(en).toContain('terces.pages.dev');
     texts.length = 0;
     await renderShareCard({ count: 1, breakdown: { metadata: 1 }, locale: 'fr' }, factory, toPng);
-    expect(texts.join(' ')).toContain('Ma photo trahissait 1 chose.');
+    expect(texts.join(' ')).toContain('Ma photo révélait 1 information sur moi.');
   });
 
   it('cannot take an image or text from the photo', () => {

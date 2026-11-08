@@ -136,8 +136,6 @@ describe('scan stages (full order)', () => {
     expect(Object.keys(ms)).toEqual(['face', 'text-det', 'text-rec', 'person', 'plate']);
     expect(emitted).toEqual([
       { id: 'face-0', category: 'face', source: 'yunet' },
-      { id: 'text-0', category: 'text', source: 'ppocr' },
-      { id: 'text-1', category: 'text', source: 'ppocr' },
       { id: 'text-0', category: 'text', source: 'ppocr', text: 'AB-123-CD' },
       { id: 'text-1', category: 'text', source: 'ppocr', text: 'HELLO' },
       { id: 'person-0', category: 'person', source: 'yolox' },
@@ -159,13 +157,14 @@ describe('scan stages (faces then text)', () => {
     const stages = createStages({
       detectFaces: vi.fn(async () => [box(1), box(2)]),
       detectText: vi.fn(async () => [box(3)]),
-      readTexts: vi.fn(async (_s, boxes) => boxes.map(() => null)),
+      readTexts: vi.fn(async (_s, boxes) => boxes.map(() => ({ text: 'HELLO', score: 0.9 }))),
     });
     const runner = vi.fn(() => vi.fn());
     await runScan(
       {
         source: { width: 10, height: 10, pixels: vi.fn() },
         runner,
+        dict: async () => [],
         categories: ['face', 'text'],
         emit: (f) => emitted.push({ id: f.id, category: f.category, source: f.source }),
         cancelled: () => false,
@@ -180,6 +179,7 @@ describe('scan stages (faces then text)', () => {
     expect(runner.mock.calls).toEqual([
       ['yunet', 'face'],
       ['ppocr-det', 'text-det'],
+      ...READERS.map((r) => [`ppocr-rec-${r.key}`, 'text-rec']),
     ]);
   });
 });
@@ -227,5 +227,65 @@ describe('text reading in every alphabet', () => {
 
   it('fails the scan when the Latin reader itself cannot run', async () => {
     await expect(scan(textStages(() => new Error('broken')))).rejects.toThrow('broken');
+  });
+
+  it('marks only the text boxes that were read', async () => {
+    const boxes = [
+      { x: 0, y: 0, w: 2, h: 2, score: 0.97 }, // nothing read: a flower, a nose
+      { x: 10, y: 0, w: 2, h: 2, score: 0.9 }, // one letter read without confidence
+      { x: 20, y: 0, w: 2, h: 2, score: 0.9 }, // one digit every reader agrees on
+      { x: 30, y: 0, w: 12, h: 3, score: 0.9 }, // a word
+      { x: 50, y: 0, w: 30, h: 30, score: 0.9 }, // big, nothing read
+    ];
+    const read = (b: { x: number }, model: string) =>
+      b.x === 10 && model === 'ppocr-rec-latin'
+        ? { text: 'T', score: 0.55 }
+        : b.x === 20
+          ? { text: '7', score: 0.95 }
+          : b.x === 30
+            ? { text: 'OPEN', score: 0.9 }
+            : { text: '', score: 0 };
+    const found: string[] = [];
+    await runScan(
+      {
+        source: { width: 100, height: 100, pixels: vi.fn() },
+        runner: (model) => Object.assign(vi.fn(), { model }),
+        dict: async () => [],
+        categories: ['text'],
+        emit: (f) => void found.push(`${f.id}:${f.text}`),
+        cancelled: () => false,
+      },
+      createStages({
+        detectText: vi.fn(async () => boxes),
+        readTexts: vi.fn(async (_s, bs, run) =>
+          bs.map((b: { x: number }) => read(b, (run as unknown as { model: string }).model)),
+        ),
+      }).filter((s) => s.name === 'text-det' || s.name === 'text-rec'),
+    );
+    expect(found.sort()).toEqual(['text-2:7', 'text-3:OPEN']);
+  });
+
+  it('has the Latin reader read every box, beyond the limit of the other readers', async () => {
+    const boxes = Array.from({ length: 45 }, (_, i) => ({ x: i * 2, y: 0, w: 2, h: 1, score: 0.9 }));
+    const sizes: Record<string, number> = {};
+    await runScan(
+      {
+        source: { width: 100, height: 100, pixels: vi.fn() },
+        runner: (model) => Object.assign(vi.fn(), { model }),
+        dict: async () => [],
+        categories: ['text'],
+        emit: () => {},
+        cancelled: () => false,
+      },
+      createStages({
+        detectText: vi.fn(async () => boxes),
+        readTexts: vi.fn(async (_s, bs, run) => {
+          sizes[(run as unknown as { model: string }).model] = bs.length;
+          return bs.map(() => ({ text: 'AB', score: 0.9 }));
+        }),
+      }).filter((s) => s.name === 'text-det' || s.name === 'text-rec'),
+    );
+    expect(sizes['ppocr-rec-latin']).toBe(45);
+    expect(sizes['ppocr-rec-zh']).toBe(40);
   });
 });

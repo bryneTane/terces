@@ -31,6 +31,7 @@
   "scan.found_other": "{count} findings so far",
   "scan.skip": "Skip to review",
   "review.title": "Review",
+  "review.checkMarks": "Logos, crests, badges and uniforms are not detected. If one shows your school or workplace, draw over it.",
   "review.hint": "Tap a zone to keep it visible. Draw to cover anything we missed.",
   "review.metadata_one": "{count} metadata group will be removed",
   "review.metadata_other": "{count} metadata groups will be removed",

@@ -295,9 +295,9 @@ export function HeroPhoto() {
           </div>
         </div>
       </div>
-      <figcaption className="mt-10 text-right font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:mt-[52px]">
+      {/* <figcaption className="mt-10 text-right font-mono text-[11px] uppercase tracking-[0.14em] text-muted sm:mt-[52px]">
         {t('hero.caption')}
-      </figcaption>
+      </figcaption> */}
     </figure>
   );
 }

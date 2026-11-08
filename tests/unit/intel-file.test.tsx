@@ -85,7 +85,7 @@ describe('IntelFile', () => {
 
   it('is translated', () => {
     show(meta, [v('face')], 'fr');
-    expect(screen.getByTestId('intel-count')).toHaveTextContent('Cette photo trahit 3 choses.');
+    expect(screen.getByTestId('intel-count')).toHaveTextContent('Cette photo révèle 3 informations.');
     expect(screen.getByText('45.7640, 4.8357 (près de Lyon, FR)')).toBeInTheDocument();
   });
 });
