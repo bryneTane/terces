@@ -8,18 +8,17 @@ import {
   findDatabaseId,
   parseArgs,
   previewBranch,
+  secretNames,
   withDatabaseId,
 } from '../../scripts/deploy.ts';
 
-// The committed wrangler.toml with its placeholders (the working copy gets real values from
-// `pnpm deploy:setup`, so it cannot be the fixture).
-const toml = readFileSync('wrangler.toml', 'utf8')
-  .replace(/database_id = "[^"]*"[^\n]*/, 'database_id = "00000000-0000-0000-0000-000000000000"')
-  .replace(/ACCESS_TEAM_DOMAIN = "[^"]*"[^\n]*/, 'ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com"')
-  .replace(/ACCESS_AUD = "[^"]*"/, 'ACCESS_AUD = "replace-with-access-application-aud-tag"');
-const ready = withDatabaseId(toml, '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b')
-  .replace(/ACCESS_TEAM_DOMAIN = "[^"]*"[^\n]*/, 'ACCESS_TEAM_DOMAIN = "me.cloudflareaccess.com"')
-  .replace(/ACCESS_AUD = "[^"]*"/, 'ACCESS_AUD = "abc123"');
+// wrangler.toml with the placeholder database id (`pnpm deploy:setup` fills in the real one).
+const toml = readFileSync('wrangler.toml', 'utf8').replace(
+  /database_id = "[^"]*"[^\n]*/,
+  'database_id = "00000000-0000-0000-0000-000000000000"',
+);
+const ready = withDatabaseId(toml, '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b');
+const SECRETS = ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD'];
 
 describe('deploy script', () => {
   it('parses modes and refuses a quick production deploy', () => {
@@ -30,17 +29,42 @@ describe('deploy script', () => {
     expect(() => parseArgs(['ship'])).toThrow(/usage/);
   });
 
-  it('flags every placeholder in wrangler.toml, and none once filled', () => {
-    expect(configProblems(toml, 'prod').errors).toHaveLength(3);
-    expect(configProblems(ready, 'prod')).toEqual({ errors: [], warnings: [] });
+  it('needs the database id and both Access secrets for production', () => {
+    expect(configProblems(toml, 'prod', []).errors).toHaveLength(3);
+    expect(configProblems(ready, 'prod', ['ACCESS_AUD']).errors).toEqual([
+      'ACCESS_TEAM_DOMAIN is not set: pnpm wrangler pages secret put ACCESS_TEAM_DOMAIN --project-name terces',
+    ]);
+    expect(configProblems(ready, 'prod', SECRETS)).toEqual({ errors: [], warnings: [] });
+    expect(configProblems(ready, 'prod', null).errors).toEqual([
+      'Could not list the Pages secrets (`wrangler pages secret list`)',
+    ]);
+  });
+
+  it('keeps the Access settings out of wrangler.toml', () => {
+    expect(toml).not.toMatch(/^\s*ACCESS_/m);
+    const withVar = `${ready}\n[vars]\nACCESS_AUD = "abc"\n`;
+    expect(configProblems(withVar, 'prod', SECRETS).errors).toEqual([
+      'ACCESS_AUD is in wrangler.toml: remove it, it is a Pages secret',
+    ]);
   });
 
   it('lets a preview go out before Access is configured, with warnings', () => {
-    const dbOnly = withDatabaseId(toml, '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b');
-    expect(configProblems(dbOnly, 'preview').errors).toEqual([]);
-    expect(configProblems(dbOnly, 'preview').warnings).toHaveLength(2);
-    expect(configProblems(dbOnly, 'prod').errors).toHaveLength(2);
-    expect(configProblems(toml, 'preview').errors).toHaveLength(1);
+    expect(configProblems(ready, 'preview', []).errors).toEqual([]);
+    expect(configProblems(ready, 'preview', []).warnings).toEqual([
+      'ACCESS_TEAM_DOMAIN is not set: pnpm wrangler pages secret put ACCESS_TEAM_DOMAIN --project-name terces --env preview (until then /admin answers 401)',
+      'ACCESS_AUD is not set: pnpm wrangler pages secret put ACCESS_AUD --project-name terces --env preview (until then /admin answers 401)',
+    ]);
+    expect(configProblems(toml, 'preview', []).errors).toHaveLength(1);
+  });
+
+  it('reads secret names, never values, from the wrangler listing', () => {
+    const out = [
+      'The "production" environment of your Pages project "terces" has access to the following secrets:',
+      '  - ACCESS_AUD: Value Encrypted',
+      '  - ACCESS_TEAM_DOMAIN: Value Encrypted',
+    ].join('\n');
+    expect(secretNames(out)).toEqual(['ACCESS_AUD', 'ACCESS_TEAM_DOMAIN']);
+    expect(secretNames('')).toEqual([]);
   });
 
   it('never deploys a preview onto the production branch', () => {

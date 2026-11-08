@@ -37,23 +37,38 @@ export function parseArgs(argv: string[]): Options {
   return { mode, quick, yes: argv.includes('--yes'), ...(branch ? { branch } : {}) };
 }
 
+/** The Cloudflare Access settings of the /admin page: Pages secrets, kept out of the repo. */
+export const ACCESS_SECRETS = ['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD'] as const;
+
+/** Secret names in `wrangler pages secret list` output (names only: values are never shown). */
+export function secretNames(listOutput: string): string[] {
+  return [...listOutput.matchAll(/^\s*-\s*([A-Za-z0-9_]+):/gm)].map((m) => m[1]!);
+}
+
 /**
- * Problems in wrangler.toml. The database id always blocks. Missing Access settings block
+ * Problems before a deploy. The database id always blocks. Missing Access secrets block
  * production only: on a preview the admin page and stats simply refuse everyone (fail closed).
+ * `secrets` is null when they could not be listed.
  */
-export function configProblems(toml: string, mode: Mode = 'prod'): { errors: string[]; warnings: string[] } {
+export function configProblems(
+  toml: string,
+  mode: Mode = 'prod',
+  secrets: string[] | null = [],
+): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
-  const access: string[] = [];
   if (toml.includes(PLACEHOLDER_DB) || !/database_id\s*=\s*"[0-9a-f-]{36}"/.test(toml))
     errors.push('database_id is still the placeholder: run `pnpm deploy:setup`');
-  if (/ACCESS_TEAM_DOMAIN\s*=\s*"(example\.|<)/.test(toml))
-    access.push(
-      'ACCESS_TEAM_DOMAIN is a placeholder: set your Zero Trust team domain (e.g. myteam.cloudflareaccess.com)',
-    );
-  if (/ACCESS_AUD\s*=\s*"(replace-with|<)/.test(toml))
-    access.push(
-      'ACCESS_AUD is a placeholder: set the Application Audience (AUD) tag of the Access app for /admin',
-    );
+  // A [vars] entry and a secret of the same name clash: the settings live only in secrets.
+  for (const name of ACCESS_SECRETS)
+    if (new RegExp(`^\\s*${name}\\s*=`, 'm').test(toml))
+      errors.push(`${name} is in wrangler.toml: remove it, it is a Pages secret`);
+  const env = mode === 'prod' ? '' : ' --env preview';
+  const access =
+    secrets === null
+      ? ['Could not list the Pages secrets (`wrangler pages secret list`)']
+      : ACCESS_SECRETS.filter((n) => !secrets.includes(n)).map(
+          (n) => `${n} is not set: pnpm wrangler pages secret put ${n} --project-name ${PROJECT}${env}`,
+        );
   return mode === 'prod'
     ? { errors: [...errors, ...access], warnings: [] }
     : { errors, warnings: access.map((w) => `${w} (until then /admin answers 401)`) };
@@ -163,23 +178,31 @@ function setup() {
   console.log(`wrangler.toml: database_id = "${id}"`);
   pnpm('wrangler', 'd1', 'migrations', 'apply', DATABASE, '--remote');
 
-  const left = configProblems(readFileSync('wrangler.toml', 'utf8')).errors;
+  const left = configProblems(readFileSync('wrangler.toml', 'utf8'), 'prod', listSecrets('prod')).errors;
   console.log('\nDone with what can be scripted. Still to do in the Cloudflare dashboard:');
   console.log('  1. Zero Trust > Access > Applications: add a self-hosted app for terces.pages.dev/admin*');
   console.log('     and *.terces.pages.dev/admin* (previews), allowing only your email.');
-  console.log('     Copy its Application Audience (AUD) tag and your team domain into wrangler.toml [vars].');
+  console.log('     Then store your team domain and the app\'s Application Audience (AUD) tag as secrets:');
+  for (const n of ACCESS_SECRETS) console.log(`       pnpm wrangler pages secret put ${n} --project-name ${PROJECT}`);
+  console.log('     (add --env preview to each to open /admin on previews too).');
   console.log('  2. Optional: a rate limiting rule on /api/hit.');
   if (left.length) {
-    console.log('\nwrangler.toml still has:');
+    console.log('\nStill missing:');
     for (const l of left) console.log(`  - ${l}`);
   }
 }
 
+function listSecrets(mode: Mode): string[] | null {
+  const env = mode === 'prod' ? [] : ['--env', 'preview'];
+  const out = capture('pnpm', ['-s', 'wrangler', 'pages', 'secret', 'list', '--project-name', PROJECT, ...env]);
+  return out === null ? null : secretNames(out);
+}
+
 async function deploy(o: Options) {
-  const { errors, warnings } = configProblems(readFileSync('wrangler.toml', 'utf8'), o.mode);
-  if (errors.length) fail(['wrangler.toml is not ready:', ...errors]);
-  for (const w of warnings) console.warn(`Warning: ${w}`);
   requireLogin();
+  const { errors, warnings } = configProblems(readFileSync('wrangler.toml', 'utf8'), o.mode, listSecrets(o.mode));
+  if (errors.length) fail(['Not ready to deploy:', ...errors]);
+  for (const w of warnings) console.warn(`Warning: ${w}`);
 
   const gitBranch = capture('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
   const dirty = (capture('git', ['status', '--porcelain']) ?? '').length > 0;

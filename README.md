@@ -124,9 +124,17 @@ pnpm deploy:preview   # full check, build, migrations, deploy to <branch>.terces
 pnpm deploy:prod      # same to production: clean tree on main, typed confirmation
 ```
 
-`deploy:preview --quick` skips the end-to-end tests. Setup prints the remaining dashboard steps:
-a Cloudflare Access application for `/admin`, whose team domain and audience tag go into
-`wrangler.toml`. Until then, the admin page refuses everyone.
+`deploy:preview --quick` skips the end-to-end tests. Setup prints the remaining dashboard step:
+a Cloudflare Access application for `/admin`. Its team domain and audience tag are stored as Pages
+secrets, outside the repo:
+
+```sh
+pnpm wrangler pages secret put ACCESS_TEAM_DOMAIN --project-name terces   # myteam.cloudflareaccess.com
+pnpm wrangler pages secret put ACCESS_AUD --project-name terces           # the app's AUD tag
+```
+
+Add `--env preview` to set them for previews too. Without them the admin page refuses everyone,
+and a production deploy stops. For `wrangler pages dev`, put them in `.dev.vars` (not committed).
 
 ## License
 

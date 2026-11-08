@@ -8,6 +8,5 @@ database_name = "terces-usage"
 database_id = "d73fbcc6-45af-4cb0-8c84-ffe683343617"
 migrations_dir = "migrations"
 
-[vars]
-ACCESS_TEAM_DOMAIN = "example.cloudflareaccess.com" # replace with your Access team domain
-ACCESS_AUD = "replace-with-access-application-aud-tag"
+# The /admin page's Cloudflare Access settings (ACCESS_TEAM_DOMAIN, ACCESS_AUD) are Pages secrets,
+# set with `wrangler pages secret put`, not variables here: see the README's Deploy section.
