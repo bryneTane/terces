@@ -61,11 +61,14 @@ export function AppView({ pipeline }: { pipeline: Pipeline }) {
         screen = <ErrorScreen error={session.error} onRetry={pipeline.reset} />;
     }
   const key = screenKey(hash, session.state);
+  // Every screen opens at its top: the page would otherwise keep the previous screen's scroll
+  // (on a phone, Review is scrolled down to its Cloak button, so the result opened at the bottom).
   // Section links (#privacy...) from the About page land on a page that was not there when the
-  // browser looked for the anchor: scroll once it is rendered. The About page opens at its top.
+  // browser looked for the anchor: scroll to it once it is rendered.
   useEffect(() => {
-    if (key === 'about') scrollTo(0, 0);
-    else if (hash.length > 1) document.getElementById(hash.slice(1))?.scrollIntoView();
+    const anchor = key !== 'about' && hash.length > 1 ? document.getElementById(hash.slice(1)) : null;
+    if (anchor) anchor.scrollIntoView();
+    else scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [key, hash]);
   const step = key === 'scan' ? 1 : key === 'review' ? 2 : key === 'result' ? 3 : 0;
   const home = () => {

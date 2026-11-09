@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cloakFixture, settled } from './flow.ts';
+import { cloakFixture, scanToReview, settled } from './flow.ts';
 
 // rotated.jpg shows as a portrait photo: narrower than its frame, as most phone photos are.
 test('the before/after line goes where the photo is pressed', async ({ page }) => {
@@ -24,6 +24,17 @@ test('the before/after line goes where the photo is pressed', async ({ page }) =
 test('on a phone the save button is on screen without scrolling', async ({ page }) => {
   await cloakFixture(page, 'rotated.jpg');
   await settled(page);
-  await page.evaluate(() => scrollTo(0, 0));
   await expect(page.getByTestId('save-actions').getByRole('button', { name: 'Download' })).toBeInViewport();
+});
+
+test('the result opens at its top, wherever Review was scrolled', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles('tests/fixtures/street-gps.jpg');
+  await scanToReview(page);
+  await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'Cloak' }).click();
+  await expect(page.getByRole('heading', { name: 'Cloaked' })).toBeAttached({ timeout: 60_000 });
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(page.getByTestId('result-image')).toBeInViewport();
 });
